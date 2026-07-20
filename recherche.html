@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recherche avancée — Caïssa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --void:#0a0b0e; --panel:#121419; --line:rgba(255,255,255,.08);
+    --ivory:#f0e9dc; --muted:#948b7a; --brass:#cba861;
+    --sq-light:#e8dcc4; --sq-dark:#7c6446; --ease:cubic-bezier(.22,.61,.36,1); --pop:cubic-bezier(.16,1,.3,1); }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Space Grotesk",system-ui,sans-serif;background:var(--void);color:var(--ivory);
+    line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100dvh}
+  a{color:inherit}
+  .topbar{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line)}
+  .back{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);
+    font-size:.9rem;padding:7px 12px;border:1px solid var(--line);border-radius:999px;transition:.2s}
+  .back:hover{color:var(--ivory);border-color:var(--brass)}
+  .topbar__brand{font-family:"Instrument Serif",serif;font-size:1.3rem;margin-left:auto}
+  .topbar__brand em{font-style:italic;color:var(--brass)}
+
+  .wrap{max-width:920px;margin:0 auto;padding:30px 22px 70px}
+  h1{font-family:"Instrument Serif",serif;font-weight:400;font-size:clamp(1.9rem,4vw,2.6rem);margin-bottom:6px}
+  .sub{color:var(--muted);margin-bottom:26px;max-width:60ch}
+
+  .builder{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .lbl{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--brass);font-weight:600;margin-bottom:12px}
+  .line{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:38px;margin-bottom:6px}
+  .line .empty{color:var(--muted);font-size:.9rem}
+  .mv{display:inline-flex;align-items:center;gap:6px;background:rgba(203,168,97,.14);border:1px solid rgba(203,168,97,.4);
+    color:var(--ivory);border-radius:8px;padding:5px 8px 5px 11px;font-size:.9rem;font-weight:500}
+  .mv .idx{color:var(--muted);font-size:.72rem}
+  .mv button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px}
+  .mv button:hover{color:var(--ivory)}
+  .row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  #entry{flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;
+    background:#0e1014;color:var(--ivory);font-family:inherit;font-size:.95rem;outline:none}
+  #entry:focus{border-color:var(--brass)}
+  #entry.err{border-color:#c97d6b;animation:shake .3s}
+  @keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .lnkbtn{border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;
+    border-radius:9px;padding:9px 12px;font-family:inherit;font-size:.85rem;transition:.2s}
+  .lnkbtn:hover{color:var(--ivory);border-color:var(--brass)}
+
+  .nexts{margin-top:16px}
+  .nexts .lbl{margin-bottom:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{cursor:pointer;font-family:inherit;font-size:.86rem;color:var(--ivory);
+    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:999px;padding:7px 13px;transition:.2s}
+  .chip:hover{border-color:var(--brass);background:rgba(203,168,97,.1)}
+  .chip b{color:var(--brass);font-weight:600}
+  .chip small{color:var(--muted);margin-left:5px}
+
+  .count{margin:26px 0 12px;color:var(--muted);font-size:.9rem}
+  .count b{color:var(--ivory)}
+  .results{display:flex;flex-direction:column;gap:6px}
+  .res{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--line);
+    border-radius:11px;text-decoration:none;transition:.15s;background:var(--panel)}
+  .res:hover{border-color:var(--brass);background:rgba(203,168,97,.06)}
+  .res__eco{flex:none;font-size:.66rem;letter-spacing:.06em;color:var(--void);background:var(--brass);padding:3px 7px;border-radius:5px;font-weight:600}
+  .res__body{min-width:0}
+  .res__name{font-size:.95rem;color:var(--ivory);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .res__moves{font-size:.76rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .more{color:var(--muted);font-size:.85rem;text-align:center;padding:14px}
+
+  /* bulle d'aperçu */
+  .bubble{position:fixed;z-index:60;width:200px;background:rgba(13,15,20,.97);border:1px solid var(--brass);
+    border-radius:14px;padding:12px;box-shadow:0 26px 60px -24px rgba(0,0,0,.85);
+    opacity:0;visibility:hidden;transition:opacity .16s;pointer-events:none}
+  .bubble.show{opacity:1;visibility:visible}
+  .bubble__title{font-size:.78rem;color:var(--ivory);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bubble__title b{color:var(--brass);font-size:.66rem;margin-right:6px}
+  .mini{position:relative;width:176px;height:176px;border-radius:8px;overflow:hidden}
+  .mini .ms{position:absolute;width:12.5%;height:12.5%}
+  .mini .ms.d{background:var(--sq-dark)}.mini .ms.l{background:var(--sq-light)}
+  .mini .mp{position:absolute;width:12.5%;height:12.5%;background-size:82%;background-position:center;background-repeat:no-repeat;
+    display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
+  .bubble__mv{margin-top:8px;font-size:.72rem;color:var(--muted);text-align:center;min-height:15px;font-variant-numeric:tabular-nums}
+
+  @media (max-width:560px){ .bubble{display:none} }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Retour
+    </a>
+    <span class="topbar__brand">Ca<em>ï</em>ssa.</span>
+  </header>
+
+  <div class="wrap">
+    <h1>Recherche par coups</h1>
+    <p class="sub">Construis une ligne coup par coup : ajoute <b>e4</b>, puis <b>e5</b>, etc. La liste se filtre à chaque coup. Survole un résultat pour le voir joué en accéléré.</p>
+
+    <div class="builder">
+      <div class="lbl">Ta ligne</div>
+      <div class="line" id="line"></div>
+      <div class="row2">
+        <input id="entry" type="text" autocomplete="off" placeholder="Tape un coup (ex. Nf3) et Entrée…">
+        <button class="lnkbtn" id="undo">↶ Retirer le dernier</button>
+        <button class="lnkbtn" id="clear">Tout effacer</button>
+      </div>
+      <div class="nexts" id="nextsWrap">
+        <div class="lbl">Coups suivants possibles</div>
+        <div class="chips" id="nexts"></div>
+      </div>
+    </div>
+
+    <div class="count" id="count"></div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div class="bubble" id="bubble">
+    <div class="bubble__title" id="bTitle"></div>
+    <div class="mini" id="mini"></div>
+    <div class="bubble__mv" id="bMv"></div>
+  </div>
+
+  <script src="openings.js"></script>
+  <script type="module">
+  import { Chess } from "https://esm.run/chess.js";
+  const $ = id => document.getElementById(id);
+  const CDN="https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/cburnett/";
+  const UNI={wK:"♔",wQ:"♕",wR:"♖",wB:"♗",wN:"♘",wP:"♙",bK:"♚",bQ:"♛",bR:"♜",bB:"♝",bN:"♞",bP:"♟"};
+
+  const list=window.OPENINGS||[];
+  const tokenize=pgn=>pgn.replace(/\d+\.(\.\.)?/g," ").trim().split(/\s+/).filter(Boolean);
+  const TOK=list.map(o=>({o,san:tokenize(o.pgn)}));
+  const MAX=80;
+  let line=[];
+
+  /* démarrage depuis l'URL éventuelle ?line=e4,e5 */
+  const pre=(new URLSearchParams(location.search).get("line")||"").split(",").map(s=>s.trim()).filter(Boolean);
+  if(pre.length) line=pre;
+
+  function matches(){ return TOK.filter(t=> line.every((m,i)=> t.san[i]===m) ); }
+
+  function render(){
+    // ligne
+    const L=$("line");
+    L.innerHTML = line.length ? "" : '<span class="empty">Aucun coup — commence par en ajouter un ci-dessous.</span>';
+    line.forEach((m,i)=>{
+      const el=document.createElement("span"); el.className="mv";
+      el.innerHTML=`<span class="idx">${Math.floor(i/2)+1}${i%2?"…":"."}</span> ${m} <button title="Retirer à partir d'ici">×</button>`;
+      el.querySelector("button").onclick=()=>{ line=line.slice(0,i); sync(); };
+      L.appendChild(el);
+    });
+
+    const ms=matches();
+    // coups suivants
+    const nx={};
+    ms.forEach(t=>{ const n=t.san[line.length]; if(n) nx[n]=(nx[n]||0)+1; });
+    const entries=Object.entries(nx).sort((a,b)=>b[1]-a[1]);
+    const NW=$("nexts"); NW.innerHTML="";
+    $("nextsWrap").style.display = entries.length ? "" : "none";
+    entries.slice(0,18).forEach(([m,c])=>{
+      const b=document.createElement("button"); b.className="chip";
+      b.innerHTML=`<b>${m}</b><small>${c}</small>`;
+      b.onclick=()=>{ line.push(m); sync(); };
+      NW.appendChild(b);
+    });
+
+    // compte + résultats
+    $("count").innerHTML = `<b>${ms.length.toLocaleString("fr-FR")}</b> ouverture${ms.length>1?"s":""} ${line.length?"correspondent à cette ligne":"au total"}.`;
+    const R=$("results"); R.innerHTML="";
+    // on met les plus courtes (les plus "génériques") en premier
+    const sorted=ms.slice().sort((a,b)=>a.san.length-b.san.length || a.o.name.localeCompare(b.o.name));
+    sorted.slice(0,MAX).forEach(t=>{
+      const a=document.createElement("a"); a.className="res"; a.href="ouverture.html?o="+encodeURIComponent(t.o.name);
+      a.innerHTML=`<span class="res__eco">${t.o.eco}</span>
+        <span class="res__body"><span class="res__name">${t.o.name}</span><span class="res__moves">${t.o.pgn}</span></span>`;
+      a.addEventListener("mouseenter",e=>showBubble(t.o,a));
+      a.addEventListener("mouseleave",hideBubble);
+      R.appendChild(a);
+    });
+    if(sorted.length>MAX){ const m=document.createElement("div"); m.className="more";
+      m.textContent=`… et ${(sorted.length-MAX).toLocaleString("fr-FR")} autres. Affine ta ligne pour réduire.`; R.appendChild(m); }
+  }
+
+  function sync(){ render(); const u=new URL(location); if(line.length) u.searchParams.set("line",line.join(",")); else u.searchParams.delete("line");
+    history.replaceState(null,"",u); }
+
+  /* saisie clavier */
+  $("entry").addEventListener("keydown",e=>{
+    if(e.key!=="Enter") return;
+    const v=e.target.value.trim(); if(!v) return;
+    const ok=matches().some(t=>t.san[line.length]===v);
+    if(ok){ line.push(v); e.target.value=""; e.target.classList.remove("err"); sync(); }
+    else { e.target.classList.add("err"); setTimeout(()=>e.target.classList.remove("err"),350); }
+  });
+  $("undo").onclick=()=>{ line.pop(); sync(); };
+  $("clear").onclick=()=>{ line=[]; sync(); };
+
+  /* ---------- bulle d'aperçu (mini partie jouée vite) ---------- */
+  const bubble=$("bubble"), mini=$("mini");
+  let bTimer=null, positions=[], pIdx=0;
+
+  function buildPositions(sanList){
+    const c=new Chess(); const arr=[c.board()];
+    for(const s of sanList){ try{ c.move(s); }catch(_){ break; } arr.push(c.board()); }
+    return arr;
+  }
+  function drawMini(board){
+    let html="";
+    for(let r=0;r<8;r++) for(let cc=0;cc<8;cc++){
+      const dark=(r+cc)%2===1;
+      html+=`<div class="ms ${dark?"d":"l"}" style="left:${cc*12.5}%;top:${r*12.5}%"></div>`;
+    }
+    for(let r=0;r<8;r++) for(let cc=0;cc<8;cc++){
+      const p=board[r][cc]; if(!p) continue;
+      const code=p.color+p.type.toUpperCase();
+      html+=`<div class="mp" style="left:${cc*12.5}%;top:${r*12.5}%;background-image:url('${CDN}${code}.svg')">${""}</div>`;
+    }
+    mini.innerHTML=html;
+    // repli unicode si image absente
+    mini.querySelectorAll(".mp").forEach(el=>{
+      const url=el.style.backgroundImage; const img=new Image();
+      const code=url.match(/cburnett\/(\w\w)\.svg/); if(!code) return;
+      img.onerror=()=>{ el.style.backgroundImage="none"; el.textContent=UNI[code[1]]; el.style.color=code[1][0]==="w"?"#f4efe2":"#1a1a1e"; };
+      img.src=`${CDN}${code[1]}.svg`;
+    });
+  }
+  function showBubble(o,anchor){
+    const r=anchor.getBoundingClientRect();
+    let left=r.right+12; if(left+210>window.innerWidth) left=r.left-212;
+    let top=Math.min(Math.max(12,r.top-40), window.innerHeight-260);
+    bubble.style.left=left+"px"; bubble.style.top=top+"px";
+    $("bTitle").innerHTML=`<b>${o.eco}</b>${o.name}`;
+    bubble.classList.add("show");
+    positions=buildPositions(tokenize(o.pgn)); pIdx=0;
+    const sanList=tokenize(o.pgn);
+    clearInterval(bTimer);
+    const step=()=>{ drawMini(positions[pIdx]); $("bMv").textContent = pIdx===0 ? "position initiale" : (Math.floor((pIdx-1)/2)+1)+((pIdx-1)%2?"…":".")+" "+sanList[pIdx-1];
+      pIdx = (pIdx+1) % positions.length; };
+    step(); bTimer=setInterval(step, 620);
+  }
+  function hideBubble(){ bubble.classList.remove("show"); clearInterval(bTimer); }
+
+  render();
+  </script>
+</body>
+</html>
