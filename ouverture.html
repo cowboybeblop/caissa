@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ouverture — Caïssa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0a0b0e; --panel:#121419; --line:rgba(255,255,255,.08);
+    --beige:#ece1cd; --beige-hi:#f6efe0; --beige-ink:#2a2419;
+    --ivory:#f0e9dc; --muted:#948b7a; --brass:#cba861;
+    --sq-light:#e8dcc4; --sq-dark:#7c6446;
+    --ok:#7fae86; --bad:#c97d6b;
+    --ease:cubic-bezier(.22,.61,.36,1); --pop:cubic-bezier(.16,1,.3,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Space Grotesk",system-ui,sans-serif;background:var(--void);color:var(--ivory);
+    line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100dvh}
+  a{color:inherit}
+
+  .topbar{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line)}
+  .back{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);
+    font-size:.9rem;padding:7px 12px;border:1px solid var(--line);border-radius:999px;transition:color .2s,border-color .2s}
+  .back:hover{color:var(--ivory);border-color:var(--brass)}
+  .topbar__brand{font-family:"Instrument Serif",serif;font-size:1.3rem;margin-left:auto}
+  .topbar__brand em{font-style:italic;color:var(--brass)}
+
+  .page{max-width:1180px;margin:0 auto;padding:26px 22px 60px;
+    display:grid;grid-template-columns:1fr 1fr;gap:38px;align-items:start}
+
+  /* ---------- colonne gauche : texte ---------- */
+  .info .eco{display:inline-block;font-size:.72rem;letter-spacing:.14em;color:var(--void);
+    background:var(--brass);padding:4px 10px;border-radius:6px;font-weight:600}
+  .info h1{font-family:"Instrument Serif",serif;font-weight:400;line-height:1.05;
+    font-size:clamp(1.9rem,4vw,2.7rem);margin:14px 0 6px}
+  .info .desc{color:var(--muted);font-size:1rem;margin:14px 0 22px}
+  .info .desc b{color:var(--ivory);font-weight:500}
+
+  .block{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+  .block h3{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--brass);margin-bottom:12px;font-weight:600}
+
+  .moves{display:flex;flex-wrap:wrap;gap:2px 4px;font-size:.95rem}
+  .moves .num{color:var(--muted);margin-left:8px}
+  .moves .num:first-child{margin-left:0}
+  .ply{cursor:pointer;padding:2px 6px;border-radius:6px;transition:background .15s,color .15s}
+  .ply:hover{background:rgba(255,255,255,.06)}
+  .ply.on{background:var(--brass);color:var(--void)}
+
+  .stats__bar{display:flex;height:26px;border-radius:7px;overflow:hidden;font-size:.72rem;font-weight:600}
+  .stats__bar div{display:flex;align-items:center;justify-content:center;min-width:0;white-space:nowrap}
+  .stats__w{background:#e8e2d3;color:#2a2419}
+  .stats__d{background:#6b6b73;color:#fff}
+  .stats__b{background:#26262b;color:#e8e2d3}
+  .stats__meta{color:var(--muted);font-size:.82rem;margin-top:10px}
+  .cont{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+  .cont__row{display:flex;align-items:center;gap:10px;font-size:.9rem;
+    padding:7px 9px;border:1px solid var(--line);border-radius:9px;cursor:pointer;transition:border-color .2s,background .2s}
+  .cont__row:hover{border-color:var(--brass);background:rgba(203,168,97,.06)}
+  .cont__san{font-weight:600;min-width:52px}
+  .cont__mini{flex:1;height:6px;border-radius:3px;background:#26262b;overflow:hidden;display:flex}
+  .cont__mini i{display:block;height:100%}
+  .cont__pct{color:var(--muted);font-size:.78rem;min-width:64px;text-align:right}
+  .muted{color:var(--muted);font-size:.86rem}
+
+  /* ---------- colonne droite : échiquier ---------- */
+  .stage{position:sticky;top:22px;display:flex;flex-direction:column;align-items:center}
+  .boardwrap{display:flex;gap:12px;align-items:stretch;width:100%;justify-content:center}
+
+  .evalbar{width:16px;border-radius:8px;overflow:hidden;background:#26262b;position:relative;
+    align-self:stretch;flex:none;transition:none}
+  .evalbar__w{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#f4efe2,#d9d0bd);
+    height:50%;transition:height .5s var(--pop)}
+  .evalbar__num{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);
+    font-size:.6rem;font-weight:600;color:#0a0b0e;white-space:nowrap;letter-spacing:.05em;z-index:2;mix-blend-mode:difference}
+
+  .board{position:relative;width:min(58vh,520px,86vw);aspect-ratio:1;border-radius:12px;overflow:hidden;
+    box-shadow:0 30px 70px -30px rgba(0,0,0,.8);flex:none}
+  .sq{position:absolute;width:12.5%;height:12.5%}
+  .sq.dark{background:var(--sq-dark)} .sq.light{background:var(--sq-light)}
+  .sq.hl::after{content:"";position:absolute;inset:0;background:rgba(203,168,97,.42)}
+  .sq.dest::after{content:"";position:absolute;inset:0;
+    background:radial-gradient(circle,rgba(30,25,15,.32) 22%,transparent 24%)}
+  .coord{position:absolute;font-size:9px;font-weight:600;opacity:.55;pointer-events:none}
+  .coord.file{bottom:2px;right:3px} .coord.rank{top:2px;left:3px}
+  .piece{position:absolute;width:12.5%;height:12.5%;z-index:3;cursor:pointer;
+    background-size:84%;background-position:center;background-repeat:no-repeat;
+    transition:left .28s var(--pop),top .28s var(--pop),opacity .2s;
+    display:flex;align-items:center;justify-content:center;
+    font-size:min(7vh,62px);line-height:1;user-select:none}
+  .piece.fade{opacity:0}
+
+  .controls{display:flex;gap:6px;margin-top:14px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .ctl{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);background:var(--panel);color:var(--ivory);border-radius:10px;cursor:pointer;
+    transition:border-color .2s,background .2s}
+  .ctl:hover{border-color:var(--brass)} .ctl:disabled{opacity:.4;cursor:default}
+  .ctl.play{width:auto;padding:0 16px;gap:8px;font-family:inherit;font-size:.9rem}
+
+  .engine{margin-top:16px;width:100%;max-width:520px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:13px 15px}
+  .engine__head{display:flex;align-items:center;gap:10px;font-size:.8rem;color:var(--muted);margin-bottom:10px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#6b6b73;flex:none}
+  .dot.on{background:var(--ok)} .dot.err{background:var(--bad)}
+  .engine__row{display:flex;gap:8px;flex-wrap:wrap}
+  .ebtn{font-family:inherit;font-size:.85rem;padding:8px 13px;border-radius:9px;border:1px solid var(--line);
+    background:transparent;color:var(--ivory);cursor:pointer;transition:border-color .2s,background .2s}
+  .ebtn:hover{border-color:var(--brass);background:rgba(203,168,97,.06)}
+  .ebtn:disabled{opacity:.4;cursor:default}
+  .ebtn.tgl.on{background:var(--brass);color:var(--void);border-color:var(--brass)}
+  .engine__line{font-size:.82rem;color:var(--muted);margin-top:10px;min-height:18px;font-variant-numeric:tabular-nums}
+
+  @media (max-width:880px){
+    .page{grid-template-columns:1fr;gap:26px}
+    .stage{position:static;order:-1}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .piece{transition:none} .evalbar__w{transition:none}
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Retour
+    </a>
+    <span class="topbar__brand">Ca<em>ï</em>ssa.</span>
+  </header>
+
+  <main class="page">
+    <!-- GAUCHE : texte -->
+    <section class="info">
+      <span class="eco" id="eco">—</span>
+      <h1 id="title">Chargement…</h1>
+      <p class="desc" id="desc"></p>
+
+      <div class="block">
+        <h3>Les coups</h3>
+        <div class="moves" id="moves"></div>
+      </div>
+
+      <div class="block" id="statsBlock">
+        <h3>Dans la base Lichess</h3>
+        <div id="statsBody"><p class="muted">Chargement des statistiques…</p></div>
+      </div>
+    </section>
+
+    <!-- DROITE : échiquier -->
+    <section class="stage">
+      <div class="boardwrap">
+        <div class="evalbar" id="evalbar" title="Évaluation du moteur">
+          <div class="evalbar__w" id="evalW"></div>
+          <div class="evalbar__num" id="evalNum">0.0</div>
+        </div>
+        <div class="board" id="board"></div>
+      </div>
+
+      <div class="controls">
+        <button class="ctl" id="first" title="Début" aria-label="Début">⏮</button>
+        <button class="ctl" id="prev" title="Coup précédent" aria-label="Précédent">◀</button>
+        <button class="ctl play" id="play" aria-label="Lecture"><span id="playIco">▶</span> <span id="playTxt">Rejouer</span></button>
+        <button class="ctl" id="next" title="Coup suivant" aria-label="Suivant">▶</button>
+        <button class="ctl" id="last" title="Fin de l'ouverture" aria-label="Fin">⏭</button>
+      </div>
+
+      <div class="engine">
+        <div class="engine__head"><span class="dot" id="edot"></span><span id="estatus">Moteur : démarrage…</span></div>
+        <div class="engine__row">
+          <button class="ebtn" id="engMove" disabled>Stockfish joue un coup</button>
+          <button class="ebtn tgl" id="engAuto" disabled>Réponse auto</button>
+          <button class="ebtn" id="resetLine" disabled>Revenir à l'ouverture</button>
+        </div>
+        <div class="engine__line" id="engLine">Clique une pièce pour jouer toi-même la suite.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="openings.js"></script>
+  <script type="module">
+  import { Chess } from "https://esm.run/chess.js";
+
+  const $ = id => document.getElementById(id);
+  const P = new URLSearchParams(location.search);
+
+  /* ---------- trouver l'ouverture demandée ---------- */
+  const list = window.OPENINGS || [];
+  const wanted = (P.get("o") || "").trim();
+  const ecoWanted = (P.get("eco") || "").trim();
+  let op = list.find(o => o.name === wanted)
+        || (ecoWanted && list.find(o => o.eco === ecoWanted))
+        || list.find(o => o.name === "Italian Game")
+        || list[0];
+
+  /* ---------- parser les coups avec chess.js ---------- */
+  function stripPgn(pgn){ return pgn; } // chess.js lit le PGN numéroté directement
+  const parser = new Chess();
+  try { parser.loadPgn(op.pgn); }
+  catch(e){ /* fallback : jouer coup par coup */ 
+    parser.reset();
+    op.pgn.replace(/\d+\./g,"").trim().split(/\s+/).forEach(m=>{ try{parser.move(m);}catch(_){} });
+  }
+  const opening = parser.history({ verbose:true });   // coups de l'ouverture
+  const openingLen = opening.length;
+
+  let moves = opening.slice();   // ligne courante (ouverture + prolongations)
+  let ply   = 0;                 // position affichée = après `ply` demi-coups
+
+  /* ---------- entête / description ---------- */
+  $("eco").textContent = op.eco;
+  $("title").textContent = frName(op.name);
+  $("desc").innerHTML = describe(op, opening);
+
+  function frName(n){ return n; } // on garde le nom Lichess (anglais standardisé)
+  function describe(o, hist){
+    const seq = o.pgn.replace(/\s+/g," ").trim();
+    const n = hist.length;
+    let s = `<b>${o.name}</b> (code ECO <b>${o.eco}</b>) est une ouverture qui se caractérise par la séquence `;
+    s += `<b>${seq}</b>, soit ${n} demi-coup${n>1?"s":""}. `;
+    const fam = {A:"un début de flanc ou irrégulier",B:"une défense semi-ouverte (1.e4 sans 1…e5)",
+      C:"un jeu ouvert ou la Française (1.e4 e5, ou 1.e4 e6)",D:"un jeu fermé / Gambit Dame",
+      E:"une défense indienne"}[o.eco[0]] || "";
+    if(fam) s += `La lettre ${o.eco[0]} la classe dans ${fam}. `;
+    s += `Les chiffres ci-dessous viennent en direct de la base de parties de Lichess — rien n'est inventé.`;
+    return s;
+  }
+
+  /* ---------- liste des coups cliquable ---------- */
+  function renderMoves(){
+    const box = $("moves"); box.innerHTML = "";
+    moves.forEach((m,i)=>{
+      if(i%2===0){ const num=document.createElement("span"); num.className="num"; num.textContent=(i/2+1)+"."; box.appendChild(num); }
+      const el=document.createElement("span");
+      el.className="ply"+(i+1===ply?" on":"")+(i>=openingLen?" ext":"");
+      el.textContent=m.san;
+      el.onclick=()=>goTo(i+1);
+      box.appendChild(el);
+    });
+  }
+
+  /* ============================================================
+     ÉCHIQUIER : rendu + animation
+     ============================================================ */
+  const boardEl = $("board");
+  const PIECES = {}; // square -> element
+  const CDN = "https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/cburnett/";
+  const UNI = {wK:"♔",wQ:"♕",wR:"♖",wB:"♗",wN:"♘",wP:"♙",bK:"♚",bQ:"♛",bR:"♜",bB:"♝",bN:"♞",bP:"♟"};
+
+  function sqXY(sq){ const f=sq.charCodeAt(0)-97, r=+sq[1]; return {col:f, row:8-r}; }
+  function xyStyle(sq){ const {col,row}=sqXY(sq); return {left:col*12.5+"%", top:row*12.5+"%"}; }
+
+  // damier + coordonnées
+  (function drawSquares(){
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+      const d=document.createElement("div");
+      const dark=(r+c)%2===1;
+      d.className="sq "+(dark?"dark":"light");
+      d.style.left=c*12.5+"%"; d.style.top=r*12.5+"%";
+      const sq=String.fromCharCode(97+c)+(8-r);
+      d.dataset.sq=sq;
+      if(c===0){ const rk=document.createElement("span"); rk.className="coord rank"; rk.textContent=8-r;
+        rk.style.color=dark?"#e8dcc4":"#7c6446"; d.appendChild(rk); }
+      if(r===7){ const fl=document.createElement("span"); fl.className="coord file"; fl.textContent=String.fromCharCode(97+c);
+        fl.style.color=dark?"#e8dcc4":"#7c6446"; d.appendChild(fl); }
+      d.addEventListener("click",()=>onSquareClick(sq));
+      boardEl.appendChild(d);
+    }
+  })();
+
+  function makePiece(code, sq){
+    const el=document.createElement("div"); el.className="piece"; el.dataset.code=code;
+    const st=xyStyle(sq); el.style.left=st.left; el.style.top=st.top;
+    el.style.backgroundImage=`url("${CDN}${code}.svg")`;
+    // fallback unicode si l'image ne charge pas
+    const probe=new Image();
+    probe.onerror=()=>{ el.style.backgroundImage="none"; el.textContent=UNI[code];
+      el.style.color = code[0]==="w" ? "#f4efe2" : "#1a1a1e";
+      el.style.textShadow = code[0]==="w" ? "0 1px 2px rgba(0,0,0,.5)" : "0 1px 1px rgba(255,255,255,.25)"; };
+    probe.src=`${CDN}${code}.svg`;
+    el.addEventListener("click",(e)=>{ e.stopPropagation(); onSquareClick(sq); });
+    return el;
+  }
+
+  function setPosition(chess){
+    // rendu instantané depuis un objet Chess
+    Object.values(PIECES).forEach(el=>el.remove());
+    for(const k in PIECES) delete PIECES[k];
+    const b=chess.board();
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+      const p=b[r][c]; if(!p) continue;
+      const sq=String.fromCharCode(97+c)+(8-r);
+      const code=p.color+p.type.toUpperCase();
+      const el=makePiece(code,sq); PIECES[sq]=el; boardEl.appendChild(el);
+    }
+    clearHints();
+  }
+
+  function animateMove(m){
+    // m = objet verbose {from,to,flags,promotion,color,piece,captured?}
+    highlight(m.from,m.to);
+    const mover=PIECES[m.from];
+    if(!mover){ return; } // sécurité
+    // capture
+    if(PIECES[m.to]){ const cap=PIECES[m.to]; cap.classList.add("fade"); setTimeout(()=>cap.remove(),200); }
+    // en passant
+    if(m.flags.includes("e")){ const capSq=m.to[0]+m.from[1]; if(PIECES[capSq]){ PIECES[capSq].classList.add("fade"); const c2=PIECES[capSq]; delete PIECES[capSq]; setTimeout(()=>c2.remove(),200);} }
+    // déplacer la pièce
+    const st=xyStyle(m.to); mover.style.left=st.left; mover.style.top=st.top;
+    delete PIECES[m.from]; PIECES[m.to]=mover;
+    // promotion
+    if(m.promotion){ const code=m.color+m.promotion.toUpperCase();
+      setTimeout(()=>{ mover.dataset.code=code; mover.style.backgroundImage=`url("${CDN}${code}.svg")`; if(mover.textContent) mover.textContent=UNI[code]; },220); }
+    // roque : bouger la tour aussi
+    if(m.flags.includes("k")||m.flags.includes("q")){
+      const rank=m.from[1]; const rFrom=(m.flags.includes("k")?"h":"a")+rank; const rTo=(m.flags.includes("k")?"f":"d")+rank;
+      const rook=PIECES[rFrom]; if(rook){ const rs=xyStyle(rTo); rook.style.left=rs.left; rook.style.top=rs.top; delete PIECES[rFrom]; PIECES[rTo]=rook; }
+    }
+  }
+
+  let lastHl=[];
+  function highlight(a,b){ clearHints(); [a,b].forEach(s=>{ const el=boardEl.querySelector(`.sq[data-sq="${s}"]`); if(el){el.classList.add("hl"); lastHl.push(el);} }); }
+  function clearHints(){ lastHl.forEach(e=>e.classList.remove("hl")); lastHl=[];
+    boardEl.querySelectorAll(".sq.dest").forEach(e=>e.classList.remove("dest")); }
+
+  /* ---------- construire une position à un ply ---------- */
+  function gameAtPly(k){ const g=new Chess(); for(let i=0;i<k;i++) g.move(moves[i].san); return g; }
+
+  /* ============================================================
+     NAVIGATION
+     ============================================================ */
+  function refreshAfterChange(){ renderMoves(); requestEval(); debouncedExplorer(); syncButtons(); }
+
+  function goTo(target){
+    target=Math.max(0,Math.min(moves.length,target));
+    stopPlay();
+    if(target===ply+1){ // un coup en avant → animé
+      const m=moves[ply]; ply=target; animateMove(m);
+    } else {
+      ply=target; setPosition(gameAtPly(ply));
+      if(ply>0){ const m=moves[ply-1]; highlight(m.from,m.to); }
+    }
+    refreshAfterChange();
+  }
+  const next=()=>goTo(ply+1);
+  const prev=()=>goTo(ply-1);
+
+  $("next").onclick=next; $("prev").onclick=prev;
+  $("first").onclick=()=>goTo(0);
+  $("last").onclick=()=>goTo(openingLen);
+  window.addEventListener("keydown",e=>{ if(e.key==="ArrowRight")next(); else if(e.key==="ArrowLeft")prev(); });
+
+  function syncButtons(){
+    $("prev").disabled=ply<=0; $("first").disabled=ply<=0;
+    $("next").disabled=ply>=moves.length;
+    $("resetLine").disabled = moves.length<=openingLen && ply<=openingLen;
+  }
+
+  /* ---------- lecture auto de l'ouverture ---------- */
+  let timer=null;
+  function startPlay(){
+    if(ply>=moves.length) ply=0, setPosition(gameAtPly(0));
+    setPlayIcon(true);
+    timer=setInterval(()=>{ if(ply>=moves.length){ stopPlay(); return; } next(); }, 850);
+  }
+  function stopPlay(){ if(timer){clearInterval(timer);timer=null;} setPlayIcon(false); }
+  function setPlayIcon(on){ $("playIco").textContent=on?"⏸":"▶"; $("playTxt").textContent=on?"Pause":"Rejouer"; }
+  $("play").onclick=()=>{ timer?stopPlay():startPlay(); };
+
+  /* ============================================================
+     JOUER SOI-MÊME (clic-clic)
+     ============================================================ */
+  let sel=null;
+  function onSquareClick(sq){
+    stopPlay();
+    const g=gameAtPly(ply);
+    if(sel){
+      const legal=g.moves({square:sel,verbose:true}).find(m=>m.to===sq);
+      if(legal){ playUserMove(sel,sq); sel=null; clearHints(); return; }
+    }
+    const piece=g.get(sq);
+    if(piece && piece.color===g.turn()){
+      sel=sq; clearHints();
+      const el=boardEl.querySelector(`.sq[data-sq="${sq}"]`); if(el)el.classList.add("hl");
+      g.moves({square:sq,verbose:true}).forEach(m=>{ const d=boardEl.querySelector(`.sq[data-sq="${m.to}"]`); if(d)d.classList.add("dest"); });
+    } else { sel=null; clearHints(); if(ply>0){const m=moves[ply-1];highlight(m.from,m.to);} }
+  }
+
+  function playUserMove(from,to){
+    const g=gameAtPly(ply);
+    let res; try{ res=g.move({from,to,promotion:"q"}); }catch(_){ return; }
+    if(!res) return;
+    moves=moves.slice(0,ply).concat(res); // on branche à partir d'ici
+    const m=moves[ply]; ply++; animateMove(m);
+    refreshAfterChange();
+    if(autoReply && !g.isGameOver()) setTimeout(()=>enginePlay(), 350);
+  }
+
+  $("resetLine").onclick=()=>{ moves=opening.slice(); goTo(openingLen); };
+
+  /* ============================================================
+     STOCKFISH (WebWorker, build asm.js — marche sans en-têtes COOP/COEP,
+     donc OK sur GitHub Pages / Netlify)
+     ============================================================ */
+  let engine=null, engineReady=false, autoReply=false, wantMove=false;
+  const SF_URL="https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js";
+
+  function initEngine(){
+    try{
+      const blob=new Blob([`importScripts("${SF_URL}");`],{type:"application/javascript"});
+      engine=new Worker(URL.createObjectURL(blob));
+      engine.onmessage=onEngine;
+      engine.onerror=()=>engineError();
+      engine.postMessage("uci");
+      engine.postMessage("isready");
+    }catch(e){ engineError(); }
+  }
+  function engineError(){
+    $("edot").classList.add("err");
+    $("estatus").textContent="Moteur indisponible (l'échiquier et les stats fonctionnent quand même).";
+  }
+  function onEngine(e){
+    const line=typeof e.data==="string"?e.data:"";
+    if(line==="uciok"||line==="readyok"){ if(!engineReady){ engineReady=true; engineOn(); } return; }
+    if(line.startsWith("info") && line.includes("score")){
+      const m=line.match(/score (cp|mate) (-?\d+)/); if(m){ updateEval(m[1],+m[2]); }
+      const pv=line.match(/ pv (\w\w\w\w\w?)/); if(pv){ /* meilleur coup pressenti */ }
+    }
+    if(line.startsWith("bestmove")){
+      const bm=line.split(/\s+/)[1];
+      if(wantMove && bm && bm!=="(none)"){ wantMove=false; applyEngineMove(bm); }
+    }
+  }
+  function engineOn(){
+    $("edot").classList.add("on"); $("estatus").textContent="Stockfish prêt.";
+    $("engMove").disabled=false; $("engAuto").disabled=false;
+    requestEval();
+  }
+
+  function requestEval(){
+    if(!engineReady) return;
+    const g=gameAtPly(ply);
+    engine.postMessage("position fen "+g.fen());
+    engine.postMessage("go movetime 600");
+  }
+  function updateEval(type,val){
+    const g=gameAtPly(ply); const whiteToMove=g.turn()==="w";
+    let cp, txt;
+    if(type==="mate"){ const mv=whiteToMove?val:-val; cp=mv>0?100000:-100000; txt=(mv>0?"+":"−")+"M"+Math.abs(val); }
+    else { cp=whiteToMove?val:-val; txt=(cp>=0?"+":"−")+(Math.abs(cp)/100).toFixed(1); }
+    const pct=1/(1+Math.exp(-cp/400));
+    $("evalW").style.height=(pct*100).toFixed(1)+"%";
+    $("evalNum").textContent=txt;
+  }
+
+  function enginePlay(){ if(!engineReady) return; wantMove=true;
+    const g=gameAtPly(ply); engine.postMessage("position fen "+g.fen()); engine.postMessage("go movetime 700"); }
+  function applyEngineMove(uci){
+    const from=uci.slice(0,2), to=uci.slice(2,4), promo=uci.slice(4)||undefined;
+    const g=gameAtPly(ply); let res; try{ res=g.move({from,to,promotion:promo||"q"}); }catch(_){ return; } if(!res) return;
+    moves=moves.slice(0,ply).concat(res);
+    const m=moves[ply]; ply++; animateMove(m);
+    refreshAfterChange();
+    $("engLine").textContent="Stockfish a joué "+res.san+".";
+  }
+  $("engMove").onclick=()=>enginePlay();
+  $("engAuto").onclick=()=>{ autoReply=!autoReply; $("engAuto").classList.toggle("on",autoReply);
+    $("engLine").textContent=autoReply?"Stockfish répondra à chacun de tes coups.":"Réponse auto désactivée."; };
+
+  /* ============================================================
+     STATS LICHESS (opening explorer — données réelles)
+     ============================================================ */
+  let expTimer=null;
+  function debouncedExplorer(){ clearTimeout(expTimer); expTimer=setTimeout(loadExplorer,380); }
+  async function loadExplorer(){
+    const uci=moves.slice(0,ply).map(m=>m.from+m.to+(m.promotion||"")).join(",");
+    const url="https://explorer.lichess.ovh/lichess?variant=standard&speeds=blitz,rapid,classical&ratings=1600,1800,2000,2200,2500&moves=5&topGames=0&recentGames=0&play="+uci;
+    try{
+      const r=await fetch(url); if(!r.ok) throw new Error(r.status);
+      const d=await r.json(); renderStats(d);
+    }catch(e){ $("statsBody").innerHTML='<p class="muted">Statistiques Lichess momentanément indisponibles (limite de requêtes ?).</p>'; }
+  }
+  function renderStats(d){
+    const tot=d.white+d.draws+d.black;
+    if(!tot){ $("statsBody").innerHTML='<p class="muted">Position trop rare : aucune partie dans la base pour cette ligne.</p>'; return; }
+    const pw=Math.round(d.white/tot*100), pd=Math.round(d.draws/tot*100), pb=100-pw-pd;
+    let html=`<div class="stats__bar">
+        <div class="stats__w" style="width:${pw}%">${pw>7?pw+"%":""}</div>
+        <div class="stats__d" style="width:${pd}%">${pd>7?pd+"%":""}</div>
+        <div class="stats__b" style="width:${pb}%">${pb>7?pb+"%":""}</div></div>
+      <p class="stats__meta">${fmt(tot)} parties · Blancs ${pw}% · Nulle ${pd}% · Noirs ${pb}%</p>`;
+    if(d.moves && d.moves.length){
+      html+='<div class="cont"><h3 style="margin-top:6px">Coups les plus joués ici</h3>';
+      d.moves.slice(0,5).forEach(mv=>{
+        const t=mv.white+mv.draws+mv.black, share=Math.round(t/tot*100);
+        const w=Math.round(mv.white/t*100), dr=Math.round(mv.draws/t*100), b=100-w-dr;
+        html+=`<div class="cont__row" data-san="${mv.san}">
+            <span class="cont__san">${mv.san}</span>
+            <span class="cont__mini"><i style="width:${w}%;background:#e8e2d3"></i><i style="width:${dr}%;background:#6b6b73"></i><i style="width:${b}%;background:#26262b"></i></span>
+            <span class="cont__pct">${share}% · ${fmt(t)}</span></div>`;
+      });
+      html+="</div>";
+    }
+    $("statsBody").innerHTML=html;
+    $("statsBody").querySelectorAll(".cont__row").forEach(row=>{
+      row.onclick=()=>{ const san=row.dataset.san; const g=gameAtPly(ply);
+        let res; try{ res=g.move(san); }catch(_){ return; } if(!res) return;
+        moves=moves.slice(0,ply).concat(res); const m=moves[ply]; ply++; animateMove(m); refreshAfterChange(); };
+    });
+  }
+  function fmt(n){ return n.toLocaleString("fr-FR"); }
+
+  /* ============================================================
+     DÉMARRAGE
+     ============================================================ */
+  setPosition(new Chess());     // position de départ
+  renderMoves(); syncButtons();
+  initEngine();
+  // petite lecture auto de l'ouverture après un instant
+  setTimeout(()=>{ if(!timer && ply===0) startPlay(); }, 700);
+  loadExplorer();
+  </script>
+</body>
+</html>
