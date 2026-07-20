@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partie — Caïssa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--void:#0a0b0e;--panel:#121419;--line:rgba(255,255,255,.08);--ivory:#f0e9dc;--muted:#948b7a;
+    --brass:#cba861;--sq-light:#e8dcc4;--sq-dark:#7c6446;--pop:cubic-bezier(.16,1,.3,1)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Space Grotesk",system-ui,sans-serif;background:var(--void);color:var(--ivory);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100dvh}
+  a{color:inherit}
+  .topbar{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line)}
+  .back{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);font-size:.9rem;padding:7px 12px;border:1px solid var(--line);border-radius:999px;transition:.2s}
+  .back:hover{color:var(--ivory);border-color:var(--brass)}
+  .topbar__brand{font-family:"Instrument Serif",serif;font-size:1.3rem;margin-left:auto}.topbar__brand em{font-style:italic;color:var(--brass)}
+  .page{max-width:1080px;margin:0 auto;padding:26px 22px 60px;display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:start}
+
+  .meta__ev{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);font-weight:600}
+  .meta__players{font-family:"Instrument Serif",serif;font-size:1.7rem;line-height:1.2;margin:8px 0}
+  .meta__players .vs{color:var(--muted);font-size:1.1rem;margin:0 8px}
+  .meta__sub{color:var(--muted);font-size:.9rem;margin-bottom:20px}
+  .meta__result{display:inline-block;font-weight:600;color:var(--ivory);background:var(--panel);border:1px solid var(--line);padding:4px 12px;border-radius:8px;margin-left:8px}
+  .block{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+  .block h3{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--brass);margin-bottom:12px;font-weight:600}
+  .moves{display:flex;flex-wrap:wrap;gap:2px 4px;font-size:.95rem;max-height:340px;overflow:auto}
+  .moves .num{color:var(--muted);margin-left:8px}.moves .num:first-child{margin-left:0}
+  .ply{cursor:pointer;padding:2px 6px;border-radius:6px;transition:.15s}.ply:hover{background:rgba(255,255,255,.06)}.ply.on{background:var(--brass);color:var(--void)}
+
+  .paste{width:100%;min-height:120px;background:#0e1014;border:1px solid var(--line);border-radius:12px;color:var(--ivory);
+    font-family:ui-monospace,Menlo,monospace;font-size:.82rem;padding:12px;resize:vertical}
+  .paste:focus{outline:none;border-color:var(--brass)}
+  .pbtn{margin-top:10px;padding:9px 16px;border:0;border-radius:9px;background:var(--brass);color:var(--void);font-family:inherit;font-weight:600;cursor:pointer}
+
+  .stage{position:sticky;top:22px;display:flex;flex-direction:column;align-items:center}
+  .board{position:relative;width:min(58vh,500px,86vw);aspect-ratio:1;border-radius:12px;overflow:hidden;box-shadow:0 30px 70px -30px rgba(0,0,0,.8)}
+  .sq{position:absolute;width:12.5%;height:12.5%}.sq.dark{background:var(--sq-dark)}.sq.light{background:var(--sq-light)}
+  .sq.hl::after{content:"";position:absolute;inset:0;background:rgba(203,168,97,.42)}
+  .coord{position:absolute;font-size:9px;font-weight:600;opacity:.55}.coord.file{bottom:2px;right:3px}.coord.rank{top:2px;left:3px}
+  .piece{position:absolute;width:12.5%;height:12.5%;z-index:3;background-size:84%;background-position:center;background-repeat:no-repeat;
+    transition:left .28s var(--pop),top .28s var(--pop),opacity .2s;display:flex;align-items:center;justify-content:center;font-size:min(7vh,58px);line-height:1}
+  .piece.fade{opacity:0}
+  .controls{display:flex;gap:6px;margin-top:14px;flex-wrap:wrap;justify-content:center}
+  .ctl{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--panel);color:var(--ivory);border-radius:10px;cursor:pointer;transition:.2s}
+  .ctl:hover{border-color:var(--brass)}.ctl:disabled{opacity:.4;cursor:default}.ctl.play{width:auto;padding:0 16px;gap:8px;font-family:inherit;font-size:.9rem}
+  .msg{color:var(--muted);padding:26px 0;text-align:center}.msg.err{color:#c97d6b}
+  @media(max-width:880px){.page{grid-template-columns:1fr;gap:24px}.stage{position:static;order:-1}}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="back" href="index.html"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Retour</a>
+    <span class="topbar__brand">Ca<em>ï</em>ssa.</span>
+  </header>
+
+  <main class="page">
+    <section class="info" id="info">
+      <div class="meta" id="meta"></div>
+      <div class="block" id="movesBlock" style="display:none"><h3>Les coups</h3><div class="moves" id="moves"></div></div>
+      <div class="block" id="pasteBlock">
+        <h3>Coller un PGN</h3>
+        <textarea class="paste" id="pgnIn" placeholder="Colle ici le PGN d'une partie, ou ouvre un lien Lichess…"></textarea>
+        <button class="pbtn" id="loadPgn">Afficher la partie</button>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="board" id="board"></div>
+      <div class="controls">
+        <button class="ctl" id="first">⏮</button>
+        <button class="ctl" id="prev">◀</button>
+        <button class="ctl play" id="play"><span id="playIco">▶</span> <span id="playTxt">Lecture</span></button>
+        <button class="ctl" id="next">▶</button>
+        <button class="ctl" id="last">⏭</button>
+        <button class="ctl" id="flip" title="Renverser">⇅</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+  import { Chess } from "https://esm.run/chess.js";
+  const $=id=>document.getElementById(id);
+  const P=new URLSearchParams(location.search);
+  const CDN="https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/cburnett/";
+  const UNI={wK:"♔",wQ:"♕",wR:"♖",wB:"♗",wN:"♘",wP:"♙",bK:"♚",bQ:"♛",bR:"♜",bB:"♝",bN:"♞",bP:"♟"};
+
+  let moves=[], ply=0, orient="w", headers={};
+  const boardEl=$("board"), PIECES={};
+
+  function sqXY(sq){const f=sq.charCodeAt(0)-97,r=+sq[1];return orient==="w"?{col:f,row:8-r}:{col:7-f,row:r-1};}
+  function xy(sq){const{col,row}=sqXY(sq);return{left:col*12.5+"%",top:row*12.5+"%"};}
+  function drawSquares(){
+    boardEl.querySelectorAll(".sq").forEach(e=>e.remove());
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const d=document.createElement("div");const dark=(r+c)%2===1;
+      d.className="sq "+(dark?"dark":"light");d.style.left=c*12.5+"%";d.style.top=r*12.5+"%";
+      const file=orient==="w"?c:7-c,rank=orient==="w"?8-r:r+1;
+      d.dataset.sq=String.fromCharCode(97+file)+rank;
+      if(c===0){const rk=document.createElement("span");rk.className="coord rank";rk.textContent=rank;rk.style.color=dark?"#e8dcc4":"#7c6446";d.appendChild(rk);}
+      if(r===7){const fl=document.createElement("span");fl.className="coord file";fl.textContent=String.fromCharCode(97+file);fl.style.color=dark?"#e8dcc4":"#7c6446";d.appendChild(fl);}
+      boardEl.appendChild(d);
+    }
+  }
+  function makePiece(code,sq){
+    const el=document.createElement("div");el.className="piece";const st=xy(sq);el.style.left=st.left;el.style.top=st.top;
+    el.style.backgroundImage=`url("${CDN}${code}.svg")`;
+    const pb=new Image();pb.onerror=()=>{el.style.backgroundImage="none";el.textContent=UNI[code];el.style.color=code[0]==="w"?"#f4efe2":"#1a1a1e";el.style.textShadow=code[0]==="w"?"0 1px 2px rgba(0,0,0,.5)":"0 1px 1px rgba(255,255,255,.25)";};pb.src=`${CDN}${code}.svg`;
+    return el;
+  }
+  function gameAt(k){const g=new Chess();for(let i=0;i<k;i++)g.move(moves[i].san);return g;}
+  function setPos(g){
+    Object.values(PIECES).forEach(e=>e.remove());for(const k in PIECES)delete PIECES[k];
+    const b=g.board();
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(!p)continue;
+      const sq=String.fromCharCode(97+c)+(8-r);const el=makePiece(p.color+p.type.toUpperCase(),sq);PIECES[sq]=el;boardEl.appendChild(el);}
+    clearHl();
+  }
+  function animate(m){
+    hl(m.from,m.to);const mv=PIECES[m.from];if(!mv)return;
+    if(PIECES[m.to]){const c=PIECES[m.to];c.classList.add("fade");setTimeout(()=>c.remove(),200);}
+    if(m.flags.includes("e")){const cs=m.to[0]+m.from[1];const c2=PIECES[cs];if(c2){c2.classList.add("fade");delete PIECES[cs];setTimeout(()=>c2.remove(),200);}}
+    const st=xy(m.to);mv.style.left=st.left;mv.style.top=st.top;delete PIECES[m.from];PIECES[m.to]=mv;
+    if(m.promotion){const code=m.color+m.promotion.toUpperCase();setTimeout(()=>{mv.style.backgroundImage=`url("${CDN}${code}.svg")`;if(mv.textContent)mv.textContent=UNI[code];},220);}
+    if(m.flags.includes("k")||m.flags.includes("q")){const rk=m.from[1],rf=(m.flags.includes("k")?"h":"a")+rk,rt=(m.flags.includes("k")?"f":"d")+rk;const rook=PIECES[rf];if(rook){const rs=xy(rt);rook.style.left=rs.left;rook.style.top=rs.top;delete PIECES[rf];PIECES[rt]=rook;}}
+  }
+  let lastHl=[];
+  function hl(a,b){clearHl();[a,b].forEach(s=>{const el=boardEl.querySelector(`.sq[data-sq="${s}"]`);if(el){el.classList.add("hl");lastHl.push(el);}});}
+  function clearHl(){lastHl.forEach(e=>e.classList.remove("hl"));lastHl=[];}
+  function reHl(){if(ply>0){const m=moves[ply-1];hl(m.from,m.to);}}
+
+  function renderMoves(){
+    const box=$("moves");box.innerHTML="";
+    moves.forEach((m,i)=>{
+      if(i%2===0){const n=document.createElement("span");n.className="num";n.textContent=(i/2+1)+".";box.appendChild(n);}
+      const el=document.createElement("span");el.className="ply"+(i+1===ply?" on":"");el.textContent=m.san;el.onclick=()=>goTo(i+1);box.appendChild(el);
+    });
+    const on=box.querySelector(".ply.on");if(on)on.scrollIntoView({block:"nearest"});
+  }
+  function syncBtns(){$("prev").disabled=ply<=0;$("first").disabled=ply<=0;$("next").disabled=ply>=moves.length;$("last").disabled=ply>=moves.length;}
+  function goTo(t){t=Math.max(0,Math.min(moves.length,t));stopPlay();
+    if(t===ply+1){const m=moves[ply];ply=t;animate(m);}else{ply=t;setPos(gameAt(ply));reHl();}
+    renderMoves();syncBtns();}
+  const next=()=>goTo(ply+1),prev=()=>goTo(ply-1);
+  $("next").onclick=next;$("prev").onclick=prev;$("first").onclick=()=>goTo(0);$("last").onclick=()=>goTo(moves.length);
+  window.addEventListener("keydown",e=>{if(e.key==="ArrowRight")next();else if(e.key==="ArrowLeft")prev();});
+  let timer=null;
+  function startPlay(){if(ply>=moves.length){ply=0;setPos(gameAt(0));}setIco(true);timer=setInterval(()=>{if(ply>=moves.length){stopPlay();return;}next();},900);}
+  function stopPlay(){if(timer){clearInterval(timer);timer=null;}setIco(false);}
+  function setIco(on){$("playIco").textContent=on?"⏸":"▶";$("playTxt").textContent=on?"Pause":"Lecture";}
+  $("play").onclick=()=>timer?stopPlay():startPlay();
+  $("flip").onclick=()=>{orient=orient==="w"?"b":"w";drawSquares();setPos(gameAt(ply));reHl();};
+
+  function loadGame(pgn){
+    const c=new Chess();
+    try{ c.loadPgn(pgn); }catch(e){ $("meta").innerHTML='<p class="msg err">PGN illisible.</p>'; return false; }
+    moves=c.history({verbose:true});
+    if(!moves.length){ $("meta").innerHTML='<p class="msg err">Aucun coup trouvé dans ce PGN.</p>'; return false; }
+    headers=c.header()||{};
+    ply=0; drawSquares(); setPos(new Chess());
+    renderMoves(); syncBtns(); renderMeta();
+    $("movesBlock").style.display=""; $("pasteBlock").style.display="none";
+    setTimeout(()=>{ if(!timer&&ply===0) startPlay(); },500);
+    return true;
+  }
+  function renderMeta(){
+    const h=headers;
+    const w=h.White||"Blancs", b=h.Black||"Noirs", wr=h.WhiteElo?` (${h.WhiteElo})`:"", br=h.BlackElo?` (${h.BlackElo})`:"";
+    const ev=[h.Event,h.Site].filter(x=>x&&x!=="?").join(" · ")||"Partie";
+    const sub=[h.Date&&h.Date!=="????.??.??"?h.Date.replace(/\./g,"/"):"", h.ECO?("ECO "+h.ECO):"", h.Opening||""].filter(Boolean).join(" · ");
+    const res=h.Result&&h.Result!=="*"?h.Result:"";
+    $("meta").innerHTML=`<div class="meta__ev">${esc(ev)}</div>
+      <div class="meta__players">${esc(w)}${wr}<span class="vs">vs</span>${esc(b)}${br}${res?`<span class="meta__result">${res}</span>`:""}</div>
+      <div class="meta__sub">${esc(sub)}</div>`;
+  }
+  const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  $("loadPgn").onclick=()=>{ const v=$("pgnIn").value.trim(); if(v) loadGame(v); };
+
+  /* ---------- démarrage ---------- */
+  async function boot(){
+    drawSquares(); setPos(new Chess());
+    const pgn=P.get("pgn"); let id=P.get("id");
+    const raw=P.get("g"); // lien libre éventuel
+    if(!id && raw){ const m=raw.match(/lichess\.org\/(\w{8})/); if(m) id=m[1]; }
+    if(pgn){ loadGame(pgn); return; }
+    if(id){
+      $("meta").innerHTML='<p class="msg">Chargement de la partie…</p>';
+      try{
+        const txt=await fetch(`https://lichess.org/game/export/${id}?clocks=false&evals=false&literate=false`,
+          {headers:{Accept:"application/x-chess-pgn"}}).then(r=>{if(!r.ok)throw 0;return r.text();});
+        loadGame(txt);
+      }catch(e){ $("meta").innerHTML='<p class="msg err">Impossible de récupérer cette partie Lichess. Colle son PGN ci-dessous.</p>'; }
+      return;
+    }
+    $("meta").innerHTML='<p class="msg">Colle un PGN ci-dessous, ou ouvre une partie depuis un profil ou un lien Lichess.</p>';
+  }
+  boot();
+  </script>
+</body>
+</html>
