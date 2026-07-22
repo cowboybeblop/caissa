@@ -60,6 +60,32 @@
   .cont__pct{color:var(--muted);font-size:.78rem;min-width:64px;text-align:right}
   .muted{color:var(--muted);font-size:.86rem}
 
+  /* sélecteur de tranche Elo */
+  .bands{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .band{cursor:pointer;font-family:inherit;font-size:.76rem;color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:999px;padding:4px 10px;transition:.18s}
+  .band:hover{color:var(--ivory);border-color:var(--brass)}
+  .band.on{background:var(--brass);border-color:var(--brass);color:var(--void);font-weight:600}
+
+  /* parties jouées dans la position */
+  .gload{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:.85rem;color:var(--ivory);
+    cursor:pointer;padding:9px 15px;border:1px solid var(--line);border-radius:10px;background:transparent;transition:.2s}
+  .gload:hover{border-color:var(--brass);background:rgba(203,168,97,.07)}
+  .gload:disabled{opacity:.45;cursor:default}
+  .gprog{color:var(--muted);font-size:.78rem;margin-top:10px;min-height:16px}
+  .glist{display:flex;flex-direction:column;gap:5px;margin-top:12px;max-height:420px;overflow:auto}
+  .game{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);
+    border-radius:9px;text-decoration:none;transition:.15s}
+  .game:hover{border-color:var(--brass);background:rgba(203,168,97,.06)}
+  .game__res{flex:none;width:34px;text-align:center;font-size:.72rem;font-weight:600;padding:2px 0;
+    border-radius:4px;background:#26262b;color:var(--muted)}
+  .game__res.w{background:#e8e2d3;color:#2a2419}.game__res.b{background:#26262b;color:#e8e2d3}
+  .game__res.d{background:#6b6b73;color:#fff}
+  .game__body{min-width:0;flex:1}
+  .game__names{font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .game__names .vs{color:var(--muted);margin:0 5px}
+  .game__sub{font-size:.72rem;color:var(--muted)}
+
   .stage{position:sticky;top:22px;display:flex;flex-direction:column;align-items:center}
   .boardwrap{display:flex;gap:12px;align-items:stretch;width:100%;justify-content:center}
   .evalbar{width:16px;border-radius:8px;overflow:hidden;background:#26262b;position:relative;align-self:stretch;flex:none}
@@ -143,7 +169,12 @@
       <p class="desc" id="desc"></p>
       <div class="block"><h3>Les coups</h3><div class="moves" id="moves"></div></div>
       <div class="block" id="statsBlock"><h3>Dans la base Lichess</h3>
+        <div class="bands" id="bands"></div>
         <div id="statsBody"><p class="muted">Chargement des statistiques…</p></div></div>
+      <div class="block" id="gamesBlock"><h3>Parties dans cette position</h3>
+        <button class="gload" id="gload">Charger 100 parties</button>
+        <div class="gprog" id="gprog"></div>
+        <div class="glist" id="glist"></div></div>
     </section>
 
     <section class="stage">
@@ -497,14 +528,121 @@
   document.addEventListener("webkitfullscreenchange",onFsChange);
 
   /* ---------- stats Lichess ---------- */
+  const SPEEDS="blitz,rapid,classical";
+  /* Paliers de l'explorateur Lichess. Le dernier est ouvert vers le haut :
+     cocher 2500 inclut aussi les parties au-dessus de 2600. */
+  const BANDS=[
+    {v:"1600", l:"1600+"},{v:"1800", l:"1800+"},{v:"2000", l:"2000+"},
+    {v:"2200", l:"2200+"},{v:"2500", l:"2500+"}
+  ];
+  const DEFAULT_BANDS=["1800","2000","2200","2500"];
+  let bands = (()=>{ try{ const s=JSON.parse(localStorage.getItem("caissa.bands"));
+    return Array.isArray(s)&&s.length ? s : DEFAULT_BANDS; }catch(_){ return DEFAULT_BANDS; } })();
+
+  function renderBands(){
+    const el=$("bands"); el.innerHTML="";
+    BANDS.forEach(b=>{
+      const btn=document.createElement("button");
+      btn.className="band"+(bands.includes(b.v)?" on":"");
+      btn.textContent=b.l;
+      btn.onclick=()=>{
+        bands = bands.includes(b.v) ? bands.filter(x=>x!==b.v) : bands.concat(b.v);
+        if(!bands.length) bands=[b.v];                    // jamais vide
+        localStorage.setItem("caissa.bands",JSON.stringify(bands));
+        renderBands(); loadExplorer(); resetGames();
+      };
+      el.appendChild(btn);
+    });
+  }
+
+  const uciNow=()=>moves.slice(0,ply).map(m=>m.from+m.to+(m.promotion||""));
+  function explorerURL(play,{moves:mv=5,top=0,recent=0}={}){
+    return "https://explorer.lichess.ovh/lichess?variant=standard"
+      +"&speeds="+SPEEDS+"&ratings="+bands.join(",")
+      +"&moves="+mv+"&topGames="+top+"&recentGames="+recent
+      +(play.length?"&play="+play.join(","):"");
+  }
+
   let expTimer=null;
-  function debouncedExplorer(){ clearTimeout(expTimer); expTimer=setTimeout(loadExplorer,380); }
+  function debouncedExplorer(){ clearTimeout(expTimer); expTimer=setTimeout(()=>{ loadExplorer(); resetGames(); },380); }
   async function loadExplorer(){
-    const uci=moves.slice(0,ply).map(m=>m.from+m.to+(m.promotion||"")).join(",");
-    const url="https://explorer.lichess.ovh/lichess?variant=standard&speeds=blitz,rapid,classical&ratings=1600,1800,2000,2200,2500&moves=5&topGames=0&recentGames=0&play="+uci;
-    try{ const r=await fetch(url); if(!r.ok) throw 0; renderStats(await r.json()); }
+    try{ const r=await fetch(explorerURL(uciNow())); if(!r.ok) throw 0; renderStats(await r.json()); }
     catch(e){ $("statsBody").innerHTML='<p class="muted">Statistiques Lichess momentanément indisponibles.</p>'; }
   }
+
+  /* ---------- parties jouées dans la position ---------- */
+  /* L'explorateur ne rend que 4 topGames + 4 recentGames par position. Pour en
+     réunir 100 on descend dans les continuations immédiates, et on affiche au
+     fil de l'eau : les 8 premières sont là tout de suite. Les requêtes partent
+     du navigateur du visiteur, donc de SON quota Lichess — d'où la pause. */
+  const PAUSE=750, PROFONDEUR=4, PAR_NIVEAU=6;
+  let gToken=0, gBusy=false, gFile=null, gVus=new Set(), gTotal=0;
+
+  function resetGames(){
+    gToken++; gBusy=false; gFile=null; gVus=new Set(); gTotal=0;
+    $("glist").innerHTML=""; $("gprog").textContent="";
+    $("gload").disabled=false; $("gload").textContent="Charger 100 parties";
+  }
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+  async function loadGames(cible=100){
+    if(gBusy) return;
+    gBusy=true;
+    const tok=++gToken, racine=uciNow();
+    $("gload").disabled=true; $("gload").textContent="Chargement…";
+
+    /* première fois : on part de la position courante.
+       fois suivantes : on reprend la file là où elle s'était arrêtée. */
+    if(!gFile) gFile=[racine];
+    const file=gFile, vus=gVus, out=[];
+    while(out.length<cible && file.length && tok===gToken){
+      const play=file.shift();
+      let d;
+      try{
+        const r=await fetch(explorerURL(play,{moves:12,top:4,recent:4}));
+        if(r.status===429){ $("gprog").textContent="Lichess demande une pause…"; await sleep(61000); file.unshift(play); continue; }
+        if(!r.ok) throw 0;
+        d=await r.json();
+      }catch(e){ await sleep(1500); continue; }
+      if(tok!==gToken) return;
+
+      for(const g of [...(d.topGames||[]),...(d.recentGames||[])]){
+        if(!g.id || vus.has(g.id) || out.length>=cible) continue;
+        vus.add(g.id); out.push(g); gTotal++; ajouterPartie(g);
+      }
+      $("gprog").textContent=`${gTotal} partie${gTotal>1?"s":""} · exploration en cours…`;
+
+      if(play.length - racine.length < PROFONDEUR){
+        for(const m of (d.moves||[]).slice(0,PAR_NIVEAU)) file.push(play.concat(m.uci));
+      }
+      if(out.length<cible) await sleep(PAUSE);
+    }
+    if(tok!==gToken) return;
+    gBusy=false;
+    const reste=file.length>0;
+    $("gload").disabled=!reste;
+    $("gload").textContent = reste ? "Charger 100 de plus" : "Ligne épuisée";
+    $("gprog").textContent = gTotal
+      ? `${gTotal} partie${gTotal>1?"s":""} · les plus consultées et les plus récentes de cette ligne.`
+      : "Aucune partie trouvée pour cette position dans cette tranche d'Elo.";
+  }
+
+  function ajouterPartie(g){
+    const a=document.createElement("a");
+    a.className="game"; a.href="partie.html?id="+g.id;
+    const res = g.winner==="white" ? ["w","1–0"] : g.winner==="black" ? ["b","0–1"] : ["d","½–½"];
+    const nom=p=>esc(p&&p.name?p.name:"?")+(p&&p.rating?` <span style="color:var(--muted)">${p.rating}</span>`:"");
+    const date=[g.month||g.year].filter(Boolean).join("");
+    a.innerHTML=`<span class="game__res ${res[0]}">${res[1]}</span>
+      <span class="game__body">
+        <span class="game__names">${nom(g.white)}<span class="vs">vs</span>${nom(g.black)}</span>
+        <span class="game__sub">${[g.speed,date].filter(Boolean).join(" · ")}</span>
+      </span>`;
+    $("glist").appendChild(a);
+  }
+  const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  $("gload").onclick=()=>loadGames(100);
+  renderBands();
   function renderStats(d){
     const tot=d.white+d.draws+d.black;
     if(!tot){ $("statsBody").innerHTML='<p class="muted">Position trop rare : aucune partie dans la base pour cette ligne.</p>'; return; }
