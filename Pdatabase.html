@@ -128,7 +128,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const slug = new URLSearchParams(location.search).get("o") || "";
 
 let DATA = null, vue = [], affiches = 0, ouverte = null;
-let fRes = "", fMin = null, fMax = null, fTri = "elo";
+let fRes = "", fCad = "", fMin = null, fMax = null, fTri = "elo";
 
 /* .json.gz lu sans aucune bibliothèque : DecompressionStream est natif. */
 async function lireGz(url){
@@ -136,6 +136,24 @@ async function lireGz(url){
   if(!r.ok) throw new Error("HTTP " + r.status);
   if(!("DecompressionStream" in window)) throw new Error("Navigateur trop ancien pour le gzip.");
   return JSON.parse(await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text());
+}
+
+/* La cadence n'est pas un champ à part dans la base : on l'estime depuis la
+   pendule du tout premier coup, déjà présente dans le texte des coups
+   ("{ [%eval 0.2] [%clk 0:01:00] }"). Pas d'incrément connu depuis un seul
+   coup, donc c'est une approximation basée sur le temps de base seulement —
+   suffisant pour distinguer bullet/blitz/rapide/classique dans l'immense
+   majorité des cas. Pas de pendule trouvée = partie sans annotation (souvent
+   plus ancienne dans le dataset) → catégorie "?".
+   Seuils identiques à Lichess (secondes) : <180 bullet, <480 blitz, <1500 rapide, sinon classique. */
+function estimerCadence(coups){
+  const m = coups && coups.match(/\[%clk (\d+):(\d{2}):(\d{2})\]/);
+  if(!m) return "?";
+  const secs = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]);
+  if(secs < 180) return "bullet";
+  if(secs < 480) return "blitz";
+  if(secs < 1500) return "rapide";
+  return "classique";
 }
 
 async function boot(){
@@ -146,6 +164,7 @@ async function boot(){
       <span style="font-size:.85rem">${esc(e.message)} — vérifie la constante BASE en haut de Pdatabase.html.</span></p>`;
     return;
   }
+  DATA.g.forEach(g => { if(g.length < 6) g.push(estimerCadence(g[4])); });
   cadre(); appliquer();
 }
 
@@ -164,6 +183,17 @@ function cadre(){
           <button data-v="1-0">Blancs</button>
           <button data-v="1/2-1/2">Nulles</button>
           <button data-v="0-1">Noirs</button>
+        </div>
+      </div>
+      <div class="frow">
+        <span class="flab">Cadence</span>
+        <div class="seg" id="segCad">
+          <button data-v="" class="on">Toutes</button>
+          <button data-v="bullet">Bullet</button>
+          <button data-v="blitz">Blitz</button>
+          <button data-v="rapide">Rapide</button>
+          <button data-v="classique">Classique</button>
+          <button data-v="?">Sans horloge</button>
         </div>
       </div>
       <div class="frow">
@@ -198,6 +228,12 @@ function cadre(){
     [...$("segRes").children].forEach(x => x.classList.toggle("on", x === b));
     appliquer();
   });
+  $("segCad").addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    fCad = b.dataset.v;
+    [...$("segCad").children].forEach(x => x.classList.toggle("on", x === b));
+    appliquer();
+  });
   $("segTri").addEventListener("click", e => {
     const b = e.target.closest("button"); if(!b) return;
     fTri = b.dataset.v;
@@ -224,6 +260,7 @@ function appliquer(){
     if(fMin !== null && moy < fMin) return false;
     if(fMax !== null && moy > fMax) return false;
     if(fRes && g[1] !== fRes) return false;
+    if(fCad && g[5] !== fCad) return false;
     return true;
   });
   if(fTri === "elo")  vue.sort((a,b) => (b[2]+b[3]) - (a[2]+a[3]));
@@ -262,8 +299,10 @@ function lot(){
   $("end").textContent = `Fin de la liste — ${affiches.toLocaleString("fr-FR")} parties affichées.`;
 }
 
+const CAD_LBL = {bullet:"Bullet", blitz:"Blitz", rapide:"Rapide", classique:"Classique", "?":"Sans horloge"};
+
 function ligne(g, i){
-  const [id, res, we, be, coups] = g;
+  const [id, res, we, be, coups, cad] = g;
   const cls = res === "1-0" ? "w" : res === "0-1" ? "b" : "d";
   const lbl = res === "1-0" ? "1–0" : res === "0-1" ? "0–1" : "½–½";
 
@@ -273,7 +312,7 @@ function ligne(g, i){
     <button class="row__hd" aria-expanded="false">
       <span class="row__r ${cls}">${lbl}</span>
       <span class="row__e">${we} <span>/</span> ${be}</span>
-      <span class="row__m">${esc(coups)}</span>
+      <span class="row__m">${esc(CAD_LBL[cad] || cad || "")} · ${esc(coups)}</span>
       <span class="row__c">▶</span>
     </button>
     <div class="row__bd"></div>`;
@@ -291,7 +330,7 @@ function ligne(g, i){
 }
 
 function detail(row, g){
-  const [id, res, we, be, coups] = g;
+  const [id, res, we, be, coups, cad] = g;
   const ecart = Math.abs(we - be);
   const gagnant = res === "1-0" ? "les Blancs" : res === "0-1" ? "les Noirs" : null;
   const favori  = we === be ? null : (we > be ? "1-0" : "0-1");
@@ -314,9 +353,9 @@ function detail(row, g){
     <div class="facts">
       <span class="fact">Elo moyen <b>${Math.round((we+be)/2)}</b></span>
       <span class="fact">Écart <b>${ecart}</b></span>
+      <span class="fact">Cadence <b>${esc(CAD_LBL[cad] || cad || "?")}</b></span>
       <span class="fact">Issue <b>${gagnant ? "victoire de " + gagnant : "partie nulle"}</b></span>
       ${surprise ? '<span class="fact">Le moins bien classé <b>l\'emporte</b></span>' : ""}
-      <span class="fact" data-nom="tc">…</span>
     </div>
     <div class="pgn">${esc(coups)}${coups && coups.split(" ").length >= 39 ? " …" : ""}</div>
     <div class="acts">
@@ -331,12 +370,10 @@ function detail(row, g){
 const CACHE = new Map();
 async function infosLichess(row, id){
   const wn = row.querySelector('[data-nom="w"]'), bn = row.querySelector('[data-nom="b"]');
-  const tc = row.querySelector('[data-nom="tc"]');
   const pose = d => {
     if(!d){ wn.textContent = bn.textContent = "joueur inconnu";
-            wn.style.color = bn.style.color = "var(--muted)"; tc.remove(); return; }
+            wn.style.color = bn.style.color = "var(--muted)"; return; }
     wn.textContent = d.w; bn.textContent = d.b;
-    tc.innerHTML = `Cadence <b>${esc(d.tc)}</b>`;
   };
   if(CACHE.has(id)) return pose(CACHE.get(id));
   try{
@@ -345,8 +382,7 @@ async function infosLichess(row, id){
     if(!r.ok) throw 0;
     const t = await r.text();
     const tag = k => (t.match(new RegExp(`\\[${k} "([^"]*)"\\]`)) || [,""])[1];
-    const d = { w: tag("White") || "?", b: tag("Black") || "?",
-                tc: tag("Event") || tag("TimeControl") || "?" };
+    const d = { w: tag("White") || "?", b: tag("Black") || "?" };
     CACHE.set(id, d); pose(d);
   }catch(e){ CACHE.set(id, null); pose(null); }
 }
