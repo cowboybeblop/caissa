@@ -66,6 +66,24 @@
   .sf__best b{color:var(--brass)}
   .sf__pv{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;color:var(--muted);margin-top:5px;text-align:center}
   .sf__hint{font-size:.73rem;color:var(--muted);margin-top:10px;text-align:center;line-height:1.5}
+
+  .gear{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);
+    background:var(--panel);color:var(--muted);border-radius:10px;cursor:pointer;transition:.2s}
+  .gear:hover{border-color:var(--brass);color:var(--ivory)}
+  .gear.on{color:var(--brass);border-color:var(--brass)}
+  .settings{display:none;width:100%;max-width:500px;margin-top:12px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:14px 16px;flex-direction:column;gap:12px}
+  .settings.open{display:flex}
+  .settings h4{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);font-weight:600}
+  .setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.85rem}
+  .setrow label{color:var(--muted)}
+  .setrow input[type=color]{width:36px;height:26px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer;padding:0}
+  .setrow select{font-family:inherit;font-size:.82rem;color:var(--ivory);background:#0e1014;border:1px solid var(--line);
+    border-radius:7px;padding:5px 8px;outline:none}
+  .setrow select:focus{border-color:var(--brass)}
+  .setreset{align-self:flex-start;font-family:inherit;font-size:.78rem;color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;transition:.18s}
+  .setreset:hover{color:var(--ivory);border-color:var(--brass)}
   @media(max-width:880px){.page{grid-template-columns:1fr;gap:24px}.stage{position:static;order:-1}}
 </style>
 </head>
@@ -101,6 +119,35 @@
         <button class="ctl" id="next">▶</button>
         <button class="ctl" id="last">⏭</button>
         <button class="ctl" id="flip" title="Renverser">⇅</button>
+        <button class="gear" id="gear" title="Réglages">⚙</button>
+      </div>
+      <div class="settings" id="settings">
+        <h4>Réglages</h4>
+        <div class="setrow"><label for="optColUser">Couleur des flèches tracées</label>
+          <input type="color" id="optColUser"></div>
+        <div class="setrow"><label for="optColMove">Couleur mobilité (déplacement)</label>
+          <input type="color" id="optColMove"></div>
+        <div class="setrow"><label for="optColCap">Couleur mobilité (prise)</label>
+          <input type="color" id="optColCap"></div>
+        <div class="setrow"><label for="optWidth">Épaisseur des flèches</label>
+          <select id="optWidth">
+            <option value="fine">Fine</option>
+            <option value="moyenne">Moyenne</option>
+            <option value="epaisse">Épaisse</option>
+          </select></div>
+        <div class="setrow"><label for="optDepth">Temps de réflexion Stockfish</label>
+          <select id="optDepth">
+            <option value="600">Rapide (0,6 s)</option>
+            <option value="1200">Normal (1,2 s)</option>
+            <option value="2500">Profond (2,5 s)</option>
+          </select></div>
+        <div class="setrow"><label for="optSpeed">Vitesse de lecture auto</label>
+          <select id="optSpeed">
+            <option value="1400">Lente</option>
+            <option value="900">Normale</option>
+            <option value="500">Rapide</option>
+          </select></div>
+        <button class="setreset" id="setReset">Réinitialiser</button>
       </div>
       <div class="sf" id="sf">
         <div class="sf__row">
@@ -124,6 +171,32 @@
 
   let moves=[], ply=0, orient="w", headers={};
   const boardEl=$("board"), PIECES={};
+
+  /* ================== RÉGLAGES ================== */
+  const DEFAUTS = { colUser:"#cba861", colMove:"#f0e9dc", colCap:"#c9584b",
+                     largeur:"moyenne", depth:"1200", vitesse:"900" };
+  const LARGEURS = { fine:{user:1.6,move:1.1,cap:1.4,prev:1.4},
+                      moyenne:{user:2.2,move:1.5,cap:1.9,prev:1.8},
+                      epaisse:{user:3,move:2,cap:2.6,prev:2.4} };
+  let OPT = { ...DEFAUTS };
+  try{ Object.assign(OPT, JSON.parse(localStorage.getItem("caissa.partieOpt") || "{}")); }catch(e){}
+  function sauverOpt(){ try{ localStorage.setItem("caissa.partieOpt", JSON.stringify(OPT)); }catch(e){} }
+  function appliquerOpt(){
+    $("optColUser").value = OPT.colUser; $("optColMove").value = OPT.colMove; $("optColCap").value = OPT.colCap;
+    $("optWidth").value = OPT.largeur; $("optDepth").value = OPT.depth; $("optSpeed").value = OPT.vitesse;
+    if(mobilityOwner){ ARROWS.filter(a=>a.kind==="mobility").forEach(removeArrowRec); drawMobilityFor(mobilityOwner); }
+    ARROWS.filter(a=>a.kind==="user").forEach(a=>{ a.color=OPT.colUser; a.width=LARGEURS[OPT.largeur].user; });
+    redrawArrows();
+  }
+  $("gear").addEventListener("click", ()=>{ $("settings").classList.toggle("open"); $("gear").classList.toggle("on"); });
+  ["optColUser","optColMove","optColCap","optWidth","optDepth","optSpeed"].forEach(id=>{
+    $(id).addEventListener("input", ()=>{
+      OPT.colUser=$("optColUser").value; OPT.colMove=$("optColMove").value; OPT.colCap=$("optColCap").value;
+      OPT.largeur=$("optWidth").value; OPT.depth=$("optDepth").value; OPT.vitesse=$("optSpeed").value;
+      sauverOpt(); appliquerOpt();
+    });
+  });
+  $("setReset").addEventListener("click", ()=>{ OPT = { ...DEFAUTS }; sauverOpt(); appliquerOpt(); });
 
   function sqXY(sq){const f=sq.charCodeAt(0)-97,r=+sq[1];return orient==="w"?{col:f,row:8-r}:{col:7-f,row:r-1};}
   function xy(sq){const{col,row}=sqXY(sq);return{left:col*12.5+"%",top:row*12.5+"%"};}
@@ -183,7 +256,7 @@
   $("next").onclick=next;$("prev").onclick=prev;$("first").onclick=()=>goTo(0);$("last").onclick=()=>goTo(moves.length);
   window.addEventListener("keydown",e=>{if(e.key==="ArrowRight")next();else if(e.key==="ArrowLeft")prev();});
   let timer=null;
-  function startPlay(){if(ply>=moves.length){ply=0;setPos(gameAt(0));}setIco(true);timer=setInterval(()=>{if(ply>=moves.length){stopPlay();return;}next();},900);}
+  function startPlay(){if(ply>=moves.length){ply=0;setPos(gameAt(0));}setIco(true);timer=setInterval(()=>{if(ply>=moves.length){stopPlay();return;}next();},+OPT.vitesse);}
   function stopPlay(){if(timer){clearInterval(timer);timer=null;}setIco(false);}
   function setIco(on){$("playIco").textContent=on?"⏸":"▶";$("playTxt").textContent=on?"Pause":"Lecture";}
   $("play").onclick=()=>timer?stopPlay():startPlay();
@@ -231,21 +304,22 @@
     let defs = arrowsSvg.querySelector("defs");
     if(!defs){ defs=document.createElementNS(svgNS,"defs"); arrowsSvg.appendChild(defs); }
     const marker=document.createElementNS(svgNS,"marker");
-    marker.setAttribute("id",id);marker.setAttribute("markerWidth","3.4");marker.setAttribute("markerHeight","3.4");
-    marker.setAttribute("refX","1.7");marker.setAttribute("refY","1.7");marker.setAttribute("orient","auto");
+    marker.setAttribute("id",id);marker.setAttribute("markerWidth","3");marker.setAttribute("markerHeight","3");
+    marker.setAttribute("refX","1.5");marker.setAttribute("refY","1.5");marker.setAttribute("orient","auto");
     marker.setAttribute("markerUnits","strokeWidth");
-    const path=document.createElementNS(svgNS,"path");path.setAttribute("d","M0,0 L3.4,1.7 L0,3.4 Z");path.setAttribute("fill",color);
+    /* pointe nette et fine, plutôt qu'une grosse tête arrondie */
+    const path=document.createElementNS(svgNS,"path");path.setAttribute("d","M0,0.3 L3,1.5 L0,2.7 Z");path.setAttribute("fill",color);
     marker.appendChild(path);defs.appendChild(marker);
     return id;
   }
   function drawArrowLine(from,to,color,opacity,width){
     const a=sqCenter(from), b=sqCenter(to);
-    const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1, pull=5.8;
+    const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1, pull=5.4;
     const bx=b.x-dx/len*pull, by=b.y-dy/len*pull;
     const mid = ensureMarker(color);
     const line=document.createElementNS(svgNS,"line");
     line.setAttribute("x1",a.x);line.setAttribute("y1",a.y);line.setAttribute("x2",bx);line.setAttribute("y2",by);
-    line.setAttribute("stroke",color);line.setAttribute("stroke-width",width);line.setAttribute("stroke-linecap","round");
+    line.setAttribute("stroke",color);line.setAttribute("stroke-width",width);line.setAttribute("stroke-linecap","butt");
     line.setAttribute("opacity",opacity);line.setAttribute("marker-end",`url(#${mid})`);
     arrowsSvg.appendChild(line); return line;
   }
@@ -282,14 +356,15 @@
   }
   function drawMobilityFor(el){
     const sq=el.dataset.sq; if(!sq) return;
+    const L = LARGEURS[OPT.largeur];
     movesFromSquare(sq).forEach(m=>addArrow(sq,m.to,{kind:"mobility",ownerEl:el,
-      color:m.capture?"#c9584b":"rgba(240,233,220,.6)", opacity:m.capture?.92:.6, width:m.capture?2.4:2}));
+      color:m.capture?OPT.colCap:OPT.colMove, opacity:m.capture?.9:.55, width:m.capture?L.cap:L.move}));
   }
   function toggleMobility(sq,el){
     if(mobilityOwner===el){ clearMobility(); return; }
     clearMobility(); mobilityOwner=el; drawMobilityFor(el);
   }
-  function addUserArrow(fromSq,toSq,ownerEl){ addArrow(fromSq,toSq,{kind:"user",ownerEl,color:"#cba861",opacity:.92,width:3}); }
+  function addUserArrow(fromSq,toSq,ownerEl){ addArrow(fromSq,toSq,{kind:"user",ownerEl,color:OPT.colUser,opacity:.92,width:LARGEURS[OPT.largeur].user}); }
 
   /* appelé après chaque changement de position : les flèches liées à une pièce la suivent,
      celles dont la pièce a disparu sont retirées, la mobilité est recalculée */
@@ -320,7 +395,8 @@
   function drawPreview(a,b){ clearPreview();
     previewEl=document.createElementNS(svgNS,"line");
     previewEl.setAttribute("x1",a.x);previewEl.setAttribute("y1",a.y);previewEl.setAttribute("x2",b.x);previewEl.setAttribute("y2",b.y);
-    previewEl.setAttribute("stroke","#cba861");previewEl.setAttribute("stroke-width","2.6");
+    previewEl.setAttribute("stroke",OPT.colUser);previewEl.setAttribute("stroke-width",LARGEURS[OPT.largeur].prev);
+    previewEl.setAttribute("stroke-linecap","butt");
     previewEl.setAttribute("stroke-dasharray","4,3");previewEl.setAttribute("opacity",".75");
     arrowsSvg.appendChild(previewEl);
   }
@@ -352,13 +428,13 @@
     } else if(ds.ownerEl){
       addUserArrow(ds.fromSq, toSq, ds.ownerEl);
     } else {
-      addArrow(ds.fromSq, toSq, {kind:"user", ownerEl:null, color:"#cba861", opacity:.92, width:3});
+      addArrow(ds.fromSq, toSq, {kind:"user", ownerEl:null, color:OPT.colUser, opacity:.92, width:LARGEURS[OPT.largeur].user});
     }
   });
 
   /* ================== STOCKFISH ================== */
   let engine=null, engineOn=false, engineState="idle", queuedFen=null, currentSearchFen=null, lastEvalText="";
-  const MOVETIME=1200;
+  const movetime = () => +OPT.depth;
 
   function ensureEngine(){
     if(engine) return Promise.resolve();
@@ -385,19 +461,19 @@
       if(queuedFen){ const f=queuedFen; queuedFen=null; startSearch(f); }
     }
   }
-  function requestAnalysis(movetime){
+  function requestAnalysis(mt){
     if(!engineOn) return;
     const fen=gameAt(ply).fen();
     if(engineState==="thinking"){ queuedFen=fen; engineState="stopping"; engine.postMessage("stop"); return; }
     if(engineState==="stopping"){ queuedFen=fen; return; }
-    startSearch(fen, movetime);
+    startSearch(fen, mt);
   }
-  function startSearch(fen, movetime=MOVETIME){
+  function startSearch(fen, movetimeVal=movetime()){
     currentSearchFen=fen; engineState="thinking";
     $("sfBest").textContent="Analyse en cours…"; $("sfPv").textContent="";
     $("sfToggle").disabled=true; $("sfDeeper").disabled=true;
     engine.postMessage("position fen "+fen);
-    engine.postMessage("go movetime "+movetime);
+    engine.postMessage("go movetime "+movetimeVal);
   }
   function setEvalBar(whitePct){ $("evalfill").style.height=Math.max(2,Math.min(98,whitePct))+"%"; }
   function updateLiveEval(type,val,pvUci){
@@ -431,16 +507,17 @@
       await ensureEngine();
       engineOn=true; $("sfToggle").textContent="Réanalyser"; $("sfToggle").disabled=false;
       $("sfDeeper").style.display="";
-      requestAnalysis(MOVETIME);
-    } else { requestAnalysis(MOVETIME); }
+      requestAnalysis(movetime());
+    } else { requestAnalysis(movetime()); }
   });
   $("sfDeeper").addEventListener("click", ()=>{
     if(!engineOn || engineState!=="idle") return;
-    requestAnalysis(Math.min(MOVETIME*2, 2500));
+    requestAnalysis(Math.min(movetime()*2, 2500));
   });
 
   /* ---------- démarrage ---------- */
   async function boot(){
+    appliquerOpt();
     drawSquares(); setPos(new Chess());
     const pgn=P.get("pgn"); let id=P.get("id");
     const raw=P.get("g"); // lien libre éventuel
