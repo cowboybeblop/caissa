@@ -36,7 +36,14 @@
   .pbtn{margin-top:10px;padding:9px 16px;border:0;border-radius:9px;background:var(--brass);color:var(--void);font-family:inherit;font-weight:600;cursor:pointer}
 
   .stage{position:sticky;top:22px;display:flex;flex-direction:column;align-items:center}
+  .boardwrap{display:flex;align-items:stretch;gap:9px}
   .board{position:relative;width:min(58vh,500px,86vw);aspect-ratio:1;border-radius:12px;overflow:hidden;box-shadow:0 30px 70px -30px rgba(0,0,0,.8)}
+  #arrowsSvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}
+  .arrow-hit{pointer-events:stroke;cursor:pointer}
+  .evalbar{width:13px;border-radius:7px;overflow:hidden;background:#26262b;border:1px solid var(--line);
+    display:flex;flex-direction:column-reverse}
+  .evalbar i{display:block;width:100%;background:#e8e2d3;transition:height .35s var(--pop)}
+  .evalnum{text-align:center;font-size:.72rem;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
   .sq{position:absolute;width:12.5%;height:12.5%}.sq.dark{background:var(--sq-dark)}.sq.light{background:var(--sq-light)}
   .sq.hl::after{content:"";position:absolute;inset:0;background:rgba(203,168,97,.42)}
   .coord{position:absolute;font-size:9px;font-weight:600;opacity:.55}.coord.file{bottom:2px;right:3px}.coord.rank{top:2px;left:3px}
@@ -47,6 +54,18 @@
   .ctl{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--panel);color:var(--ivory);border-radius:10px;cursor:pointer;transition:.2s}
   .ctl:hover{border-color:var(--brass)}.ctl:disabled{opacity:.4;cursor:default}.ctl.play{width:auto;padding:0 16px;gap:8px;font-family:inherit;font-size:.9rem}
   .msg{color:var(--muted);padding:26px 0;text-align:center}.msg.err{color:#c97d6b}
+  .sf{margin-top:16px;width:100%;max-width:500px}
+  .sf__row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+  .sf__btn{font-family:inherit;font-size:.85rem;font-weight:600;color:var(--void);background:var(--brass);
+    border:0;border-radius:9px;padding:9px 16px;cursor:pointer;transition:.18s}
+  .sf__btn:hover{filter:brightness(1.1)}
+  .sf__btn:disabled{opacity:.5;cursor:default}
+  .sf__btn.gh{background:transparent;color:var(--ivory);border:1px solid var(--line)}
+  .sf__btn.gh:hover{border-color:var(--brass);filter:none}
+  .sf__best{font-size:.9rem;color:var(--ivory);margin-top:10px;text-align:center}
+  .sf__best b{color:var(--brass)}
+  .sf__pv{font-family:ui-monospace,Menlo,monospace;font-size:.76rem;color:var(--muted);margin-top:5px;text-align:center}
+  .sf__hint{font-size:.73rem;color:var(--muted);margin-top:10px;text-align:center;line-height:1.5}
   @media(max-width:880px){.page{grid-template-columns:1fr;gap:24px}.stage{position:static;order:-1}}
 </style>
 </head>
@@ -68,7 +87,13 @@
     </section>
 
     <section class="stage">
-      <div class="board" id="board"></div>
+      <div class="boardwrap">
+        <div class="evalbar" id="evalbar"><i id="evalfill" style="height:50%"></i></div>
+        <div class="board" id="board">
+          <svg id="arrowsSvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <div class="evalnum" id="evalnum"></div>
       <div class="controls">
         <button class="ctl" id="first">⏮</button>
         <button class="ctl" id="prev">◀</button>
@@ -76,6 +101,16 @@
         <button class="ctl" id="next">▶</button>
         <button class="ctl" id="last">⏭</button>
         <button class="ctl" id="flip" title="Renverser">⇅</button>
+      </div>
+      <div class="sf" id="sf">
+        <div class="sf__row">
+          <button class="sf__btn" id="sfToggle">Analyser avec Stockfish</button>
+          <button class="sf__btn gh" id="sfDeeper" style="display:none">Analyser plus loin</button>
+        </div>
+        <div class="sf__best" id="sfBest"></div>
+        <div class="sf__pv" id="sfPv"></div>
+        <p class="sf__hint">Clic droit sur une pièce : ses coups possibles. Clic droit + glisser : dessiner
+          une flèche. Clic droit à nouveau sur la pièce : tout effacer. Clic droit sur une flèche : la retirer.</p>
       </div>
     </section>
   </main>
@@ -106,6 +141,7 @@
   }
   function makePiece(code,sq){
     const el=document.createElement("div");el.className="piece";const st=xy(sq);el.style.left=st.left;el.style.top=st.top;
+    el.dataset.sq=sq;
     el.style.backgroundImage=`url("${CDN}${code}.svg")`;
     const pb=new Image();pb.onerror=()=>{el.style.backgroundImage="none";el.textContent=UNI[code];el.style.color=code[0]==="w"?"#f4efe2":"#1a1a1e";el.style.textShadow=code[0]==="w"?"0 1px 2px rgba(0,0,0,.5)":"0 1px 1px rgba(255,255,255,.25)";};pb.src=`${CDN}${code}.svg`;
     return el;
@@ -122,9 +158,9 @@
     hl(m.from,m.to);const mv=PIECES[m.from];if(!mv)return;
     if(PIECES[m.to]){const c=PIECES[m.to];c.classList.add("fade");setTimeout(()=>c.remove(),200);}
     if(m.flags.includes("e")){const cs=m.to[0]+m.from[1];const c2=PIECES[cs];if(c2){c2.classList.add("fade");delete PIECES[cs];setTimeout(()=>c2.remove(),200);}}
-    const st=xy(m.to);mv.style.left=st.left;mv.style.top=st.top;delete PIECES[m.from];PIECES[m.to]=mv;
+    const st=xy(m.to);mv.style.left=st.left;mv.style.top=st.top;mv.dataset.sq=m.to;delete PIECES[m.from];PIECES[m.to]=mv;
     if(m.promotion){const code=m.color+m.promotion.toUpperCase();setTimeout(()=>{mv.style.backgroundImage=`url("${CDN}${code}.svg")`;if(mv.textContent)mv.textContent=UNI[code];},220);}
-    if(m.flags.includes("k")||m.flags.includes("q")){const rk=m.from[1],rf=(m.flags.includes("k")?"h":"a")+rk,rt=(m.flags.includes("k")?"f":"d")+rk;const rook=PIECES[rf];if(rook){const rs=xy(rt);rook.style.left=rs.left;rook.style.top=rs.top;delete PIECES[rf];PIECES[rt]=rook;}}
+    if(m.flags.includes("k")||m.flags.includes("q")){const rk=m.from[1],rf=(m.flags.includes("k")?"h":"a")+rk,rt=(m.flags.includes("k")?"f":"d")+rk;const rook=PIECES[rf];if(rook){const rs=xy(rt);rook.style.left=rs.left;rook.style.top=rs.top;rook.dataset.sq=rt;delete PIECES[rf];PIECES[rt]=rook;}}
   }
   let lastHl=[];
   function hl(a,b){clearHl();[a,b].forEach(s=>{const el=boardEl.querySelector(`.sq[data-sq="${s}"]`);if(el){el.classList.add("hl");lastHl.push(el);}});}
@@ -142,7 +178,7 @@
   function syncBtns(){$("prev").disabled=ply<=0;$("first").disabled=ply<=0;$("next").disabled=ply>=moves.length;$("last").disabled=ply>=moves.length;}
   function goTo(t){t=Math.max(0,Math.min(moves.length,t));stopPlay();
     if(t===ply+1){const m=moves[ply];ply=t;animate(m);}else{ply=t;setPos(gameAt(ply));reHl();}
-    renderMoves();syncBtns();}
+    renderMoves();syncBtns();refreshArrows();if(engineOn)requestAnalysis();}
   const next=()=>goTo(ply+1),prev=()=>goTo(ply-1);
   $("next").onclick=next;$("prev").onclick=prev;$("first").onclick=()=>goTo(0);$("last").onclick=()=>goTo(moves.length);
   window.addEventListener("keydown",e=>{if(e.key==="ArrowRight")next();else if(e.key==="ArrowLeft")prev();});
@@ -151,7 +187,7 @@
   function stopPlay(){if(timer){clearInterval(timer);timer=null;}setIco(false);}
   function setIco(on){$("playIco").textContent=on?"⏸":"▶";$("playTxt").textContent=on?"Pause":"Lecture";}
   $("play").onclick=()=>timer?stopPlay():startPlay();
-  $("flip").onclick=()=>{orient=orient==="w"?"b":"w";drawSquares();setPos(gameAt(ply));reHl();};
+  $("flip").onclick=()=>{orient=orient==="w"?"b":"w";drawSquares();setPos(gameAt(ply));reHl();refreshArrows();};
 
   function loadGame(pgn){
     const c=new Chess();
@@ -160,9 +196,11 @@
     if(!moves.length){ $("meta").innerHTML='<p class="msg err">Aucun coup trouvé dans ce PGN.</p>'; return false; }
     headers=c.header()||{};
     ply=0; drawSquares(); setPos(new Chess());
+    clearAllArrows();
     renderMoves(); syncBtns(); renderMeta();
     $("movesBlock").style.display=""; $("pasteBlock").style.display="none";
     setTimeout(()=>{ if(!timer&&ply===0) startPlay(); },500);
+    if(engineOn) requestAnalysis();
     return true;
   }
   function renderMeta(){
@@ -178,6 +216,228 @@
   const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
   $("loadPgn").onclick=()=>{ const v=$("pgnIn").value.trim(); if(v) loadGame(v); };
+
+  /* ================== FLÈCHES : dessin, clic droit, glisser-poser ================== */
+  const svgNS = "http://www.w3.org/2000/svg";
+  const arrowsSvg = $("arrowsSvg");
+  const ARROWS = [];       // {id, kind:'user'|'mobility', from, to, ownerEl, color, opacity, width, lineEl, hitEl}
+  let arrowSeq = 0, mobilityOwner = null, dragState = null, previewEl = null;
+
+  function sqCenter(sq){ const{col,row}=sqXY(sq); return {x:col*12.5+6.25, y:row*12.5+6.25}; }
+
+  function ensureMarker(color){
+    const id = "ah-" + color.replace(/[^a-z0-9]/gi,"");
+    if(arrowsSvg.querySelector("#"+id)) return id;
+    let defs = arrowsSvg.querySelector("defs");
+    if(!defs){ defs=document.createElementNS(svgNS,"defs"); arrowsSvg.appendChild(defs); }
+    const marker=document.createElementNS(svgNS,"marker");
+    marker.setAttribute("id",id);marker.setAttribute("markerWidth","3.4");marker.setAttribute("markerHeight","3.4");
+    marker.setAttribute("refX","1.7");marker.setAttribute("refY","1.7");marker.setAttribute("orient","auto");
+    marker.setAttribute("markerUnits","strokeWidth");
+    const path=document.createElementNS(svgNS,"path");path.setAttribute("d","M0,0 L3.4,1.7 L0,3.4 Z");path.setAttribute("fill",color);
+    marker.appendChild(path);defs.appendChild(marker);
+    return id;
+  }
+  function drawArrowLine(from,to,color,opacity,width){
+    const a=sqCenter(from), b=sqCenter(to);
+    const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1, pull=5.8;
+    const bx=b.x-dx/len*pull, by=b.y-dy/len*pull;
+    const mid = ensureMarker(color);
+    const line=document.createElementNS(svgNS,"line");
+    line.setAttribute("x1",a.x);line.setAttribute("y1",a.y);line.setAttribute("x2",bx);line.setAttribute("y2",by);
+    line.setAttribute("stroke",color);line.setAttribute("stroke-width",width);line.setAttribute("stroke-linecap","round");
+    line.setAttribute("opacity",opacity);line.setAttribute("marker-end",`url(#${mid})`);
+    arrowsSvg.appendChild(line); return line;
+  }
+  function drawArrowHit(from,to,id){
+    const a=sqCenter(from), b=sqCenter(to), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    const p1={x:a.x+(mx-a.x)*.3,y:a.y+(my-a.y)*.3}, p2={x:b.x+(mx-b.x)*.3,y:b.y+(my-b.y)*.3};
+    const hit=document.createElementNS(svgNS,"line");
+    hit.setAttribute("x1",p1.x);hit.setAttribute("y1",p1.y);hit.setAttribute("x2",p2.x);hit.setAttribute("y2",p2.y);
+    hit.setAttribute("stroke","transparent");hit.setAttribute("stroke-width","7");
+    hit.classList.add("arrow-hit");hit.dataset.arrowId=id;
+    arrowsSvg.appendChild(hit); return hit;
+  }
+  function addArrow(from,to,{kind,ownerEl=null,color,opacity=.85,width=2.6}){
+    const id="ar"+(++arrowSeq);
+    const rec={id,kind,from,to,ownerEl,color,opacity,width,
+      lineEl:drawArrowLine(from,to,color,opacity,width), hitEl:drawArrowHit(from,to,id)};
+    ARROWS.push(rec); return rec;
+  }
+  function removeArrowRec(rec){ rec.lineEl?.remove(); rec.hitEl?.remove(); const i=ARROWS.indexOf(rec); if(i>=0)ARROWS.splice(i,1); }
+  function removeArrowById(id){ const rec=ARROWS.find(a=>a.id===id); if(rec) removeArrowRec(rec); }
+  function redrawArrows(){ ARROWS.forEach(rec=>{ rec.lineEl?.remove(); rec.hitEl?.remove();
+    rec.lineEl=drawArrowLine(rec.from,rec.to,rec.color,rec.opacity,rec.width); rec.hitEl=drawArrowHit(rec.from,rec.to,rec.id); }); }
+  function clearMobility(){ ARROWS.filter(a=>a.kind==="mobility").forEach(removeArrowRec); mobilityOwner=null; }
+  function clearAllArrows(){ ARROWS.slice().forEach(removeArrowRec); mobilityOwner=null; dragState=null; clearPreview(); }
+
+  /* coups possibles d'une pièce à la position courante, même si ce n'est pas son trait
+     (on bascule le trait dans la FEN, même principe que sur ouverture.html) */
+  function movesFromSquare(sq){
+    const g=gameAt(ply), piece=g.get(sq); if(!piece) return [];
+    let fen=g.fen(); const parts=fen.split(" ");
+    if(parts[1]!==piece.color){ parts[1]=piece.color; fen=parts.join(" "); }
+    let g2; try{ g2=new Chess(fen); }catch(e){ return []; }
+    return g2.moves({square:sq,verbose:true}).map(m=>({to:m.to,capture:m.flags.includes("c")||m.flags.includes("e")}));
+  }
+  function drawMobilityFor(el){
+    const sq=el.dataset.sq; if(!sq) return;
+    movesFromSquare(sq).forEach(m=>addArrow(sq,m.to,{kind:"mobility",ownerEl:el,
+      color:m.capture?"#c9584b":"rgba(240,233,220,.6)", opacity:m.capture?.92:.6, width:m.capture?2.4:2}));
+  }
+  function toggleMobility(sq,el){
+    if(mobilityOwner===el){ clearMobility(); return; }
+    clearMobility(); mobilityOwner=el; drawMobilityFor(el);
+  }
+  function addUserArrow(fromSq,toSq,ownerEl){ addArrow(fromSq,toSq,{kind:"user",ownerEl,color:"#cba861",opacity:.92,width:3}); }
+
+  /* appelé après chaque changement de position : les flèches liées à une pièce la suivent,
+     celles dont la pièce a disparu sont retirées, la mobilité est recalculée */
+  function refreshArrows(){
+    const alive=new Set(Object.values(PIECES));
+    ARROWS.slice().forEach(rec=>{ if(rec.ownerEl && !alive.has(rec.ownerEl)) removeArrowRec(rec); });
+    ARROWS.forEach(rec=>{ if(rec.kind==="user" && rec.ownerEl?.dataset.sq) rec.from=rec.ownerEl.dataset.sq; });
+    if(mobilityOwner){
+      if(!alive.has(mobilityOwner)) clearMobility();
+      else { ARROWS.filter(a=>a.kind==="mobility").forEach(removeArrowRec); drawMobilityFor(mobilityOwner); }
+    }
+    redrawArrows();
+  }
+
+  function squareFromTarget(t){
+    const p=t.closest?.(".piece"); if(p?.dataset.sq) return p.dataset.sq;
+    const s=t.closest?.(".sq"); if(s?.dataset.sq) return s.dataset.sq;
+    return null;
+  }
+  function squareFromPoint(cx,cy){
+    const r=boardEl.getBoundingClientRect();
+    const px=(cx-r.left)/r.width, py=(cy-r.top)/r.height;
+    if(px<0||px>1||py<0||py>1) return null;
+    const col=Math.min(7,Math.max(0,Math.floor(px*8))), row=Math.min(7,Math.max(0,Math.floor(py*8)));
+    const file=orient==="w"?col:7-col, rank=orient==="w"?8-row:row+1;
+    return String.fromCharCode(97+file)+rank;
+  }
+  function drawPreview(a,b){ clearPreview();
+    previewEl=document.createElementNS(svgNS,"line");
+    previewEl.setAttribute("x1",a.x);previewEl.setAttribute("y1",a.y);previewEl.setAttribute("x2",b.x);previewEl.setAttribute("y2",b.y);
+    previewEl.setAttribute("stroke","#cba861");previewEl.setAttribute("stroke-width","2.6");
+    previewEl.setAttribute("stroke-dasharray","4,3");previewEl.setAttribute("opacity",".75");
+    arrowsSvg.appendChild(previewEl);
+  }
+  function clearPreview(){ previewEl?.remove(); previewEl=null; }
+
+  boardEl.addEventListener("contextmenu", e=>e.preventDefault());
+  boardEl.addEventListener("mousedown", e=>{
+    if(e.button!==2) return; e.preventDefault();
+    const hit=e.target.closest?.(".arrow-hit");
+    if(hit){ removeArrowById(hit.dataset.arrowId); return; }
+    const sq=squareFromTarget(e.target); if(!sq) return;
+    dragState={ fromSq:sq, ownerEl:PIECES[sq]||null, moved:false };
+  });
+  document.addEventListener("mousemove", e=>{
+    if(!dragState) return;
+    const cur=squareFromPoint(e.clientX,e.clientY);
+    if(cur && cur!==dragState.fromSq) dragState.moved=true;
+    const r=boardEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*100, y=(e.clientY-r.top)/r.height*100;
+    if(x<0||x>100||y<0||y>100) return;
+    drawPreview(sqCenter(dragState.fromSq),{x,y});
+  });
+  document.addEventListener("mouseup", e=>{
+    if(e.button!==2 || !dragState) return;
+    const ds=dragState; dragState=null; clearPreview();
+    const toSq=squareFromPoint(e.clientX,e.clientY);
+    if(!ds.moved || !toSq || toSq===ds.fromSq){
+      if(ds.ownerEl) toggleMobility(ds.fromSq, ds.ownerEl);
+    } else if(ds.ownerEl){
+      addUserArrow(ds.fromSq, toSq, ds.ownerEl);
+    } else {
+      addArrow(ds.fromSq, toSq, {kind:"user", ownerEl:null, color:"#cba861", opacity:.92, width:3});
+    }
+  });
+
+  /* ================== STOCKFISH ================== */
+  let engine=null, engineOn=false, engineState="idle", queuedFen=null, currentSearchFen=null, lastEvalText="";
+  const MOVETIME=1200;
+
+  function ensureEngine(){
+    if(engine) return Promise.resolve();
+    return new Promise(resolve=>{
+      const blob=new Blob([`importScripts('https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js');`],{type:"application/javascript"});
+      engine=new Worker(URL.createObjectURL(blob));
+      engine.onmessage=e=>{
+        const line=typeof e.data==="string"?e.data:(e.data&&e.data.data)||"";
+        onEngineLine(line);
+        if(line==="uciok") engine.postMessage("isready");
+        if(line==="readyok") resolve();
+      };
+      engine.postMessage("uci");
+    });
+  }
+  function onEngineLine(line){
+    if(engineState==="thinking" && line.startsWith("info") && line.includes(" pv ")){
+      const m=line.match(/score (cp|mate) (-?\d+).*? pv (.+)/);
+      if(m) updateLiveEval(m[1], +m[2], m[3].trim().split(/\s+/));
+    } else if(line.startsWith("bestmove")){
+      const wasThinking=engineState==="thinking", fenOfSearch=currentSearchFen;
+      engineState="idle";
+      if(wasThinking) finalizeBestMove(fenOfSearch, line.split(" ")[1]);
+      if(queuedFen){ const f=queuedFen; queuedFen=null; startSearch(f); }
+    }
+  }
+  function requestAnalysis(movetime){
+    if(!engineOn) return;
+    const fen=gameAt(ply).fen();
+    if(engineState==="thinking"){ queuedFen=fen; engineState="stopping"; engine.postMessage("stop"); return; }
+    if(engineState==="stopping"){ queuedFen=fen; return; }
+    startSearch(fen, movetime);
+  }
+  function startSearch(fen, movetime=MOVETIME){
+    currentSearchFen=fen; engineState="thinking";
+    $("sfBest").textContent="Analyse en cours…"; $("sfPv").textContent="";
+    $("sfToggle").disabled=true; $("sfDeeper").disabled=true;
+    engine.postMessage("position fen "+fen);
+    engine.postMessage("go movetime "+movetime);
+  }
+  function setEvalBar(whitePct){ $("evalfill").style.height=Math.max(2,Math.min(98,whitePct))+"%"; }
+  function updateLiveEval(type,val,pvUci){
+    const g=gameAt(ply), whiteToMove=g.turn()==="w";
+    if(type==="mate"){
+      const mateWhite = whiteToMove ? val : -val;
+      lastEvalText = mateWhite>0 ? `Mat en ${Math.abs(mateWhite)} (Blancs)` : `Mat en ${Math.abs(mateWhite)} (Noirs)`;
+      setEvalBar(mateWhite>0?100:0);
+    } else {
+      const pawns=(whiteToMove?val:-val)/100;
+      lastEvalText=(pawns>=0?"+":"")+pawns.toFixed(2);
+      setEvalBar(50+Math.max(-8,Math.min(8,pawns))/16*100);
+    }
+    $("evalnum").textContent=lastEvalText;
+    try{
+      const g2=new Chess(g.fen()), sans=[];
+      for(const u of pvUci.slice(0,6)){ const mv=g2.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]||undefined}); if(!mv) break; sans.push(mv.san); }
+      $("sfPv").textContent=sans.join(" ");
+    }catch(e){}
+  }
+  function finalizeBestMove(fen,bmUci){
+    let sanBest=bmUci;
+    try{ const g=new Chess(fen); const mv=g.move({from:bmUci.slice(0,2),to:bmUci.slice(2,4),promotion:bmUci[4]||undefined}); if(mv) sanBest=mv.san; }catch(e){}
+    $("sfBest").innerHTML=`Meilleur coup : <b>${esc(sanBest)}</b>`+(lastEvalText?` — ${esc(lastEvalText)}`:"");
+    $("sfToggle").disabled=false; $("sfToggle").textContent="Réanalyser";
+    $("sfDeeper").disabled=false; $("sfDeeper").style.display="";
+  }
+  $("sfToggle").addEventListener("click", async ()=>{
+    if(!engineOn){
+      $("sfToggle").disabled=true; $("sfToggle").textContent="Chargement du moteur…";
+      await ensureEngine();
+      engineOn=true; $("sfToggle").textContent="Réanalyser"; $("sfToggle").disabled=false;
+      $("sfDeeper").style.display="";
+      requestAnalysis(MOVETIME);
+    } else { requestAnalysis(MOVETIME); }
+  });
+  $("sfDeeper").addEventListener("click", ()=>{
+    if(!engineOn || engineState!=="idle") return;
+    requestAnalysis(Math.min(MOVETIME*2, 2500));
+  });
 
   /* ---------- démarrage ---------- */
   async function boot(){
